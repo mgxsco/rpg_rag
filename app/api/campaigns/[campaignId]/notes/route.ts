@@ -3,6 +3,8 @@ import { getSession } from '@/lib/auth'
 import { db, notes, campaigns, campaignMembers } from '@/lib/db'
 import { eq, and, desc } from 'drizzle-orm'
 import { titleToSlug } from '@/lib/wikilinks/parser'
+import { syncNoteLinks } from '@/lib/wikilinks/sync'
+import { syncNoteEmbeddings } from '@/lib/ai/embeddings'
 
 async function checkAccess(campaignId: string, userId: string) {
   const campaign = await db.query.campaigns.findFirst({
@@ -121,6 +123,14 @@ export async function POST(
       isDmOnly: isDmOnly || false,
     })
     .returning()
+
+  // Sync wikilinks and embeddings
+  try {
+    await syncNoteLinks(note.id, params.campaignId, note.content || '')
+    await syncNoteEmbeddings(note.id, params.campaignId, note.title, note.content || '')
+  } catch (error) {
+    console.error('Error syncing note:', error)
+  }
 
   return NextResponse.json(note)
 }
