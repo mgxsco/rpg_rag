@@ -6,6 +6,9 @@ import { ChatMessage, SearchResult } from '@/lib/types'
 let anthropicClient: Anthropic | null = null
 
 function getAnthropic(): Anthropic {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error('ANTHROPIC_API_KEY is not configured')
+  }
   if (!anthropicClient) {
     anthropicClient = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
@@ -43,6 +46,14 @@ export async function generateChatResponse(
   history: ChatMessage[],
   options: ChatOptions
 ): Promise<ChatResponse> {
+  // Check if API key is configured
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return {
+      content: 'Chat is not configured. Please add ANTHROPIC_API_KEY to your environment variables.',
+      sources: [],
+    }
+  }
+
   // Search for relevant chunks
   const chunks = await searchSimilarChunks(campaignId, userMessage, {
     limit: 8,
