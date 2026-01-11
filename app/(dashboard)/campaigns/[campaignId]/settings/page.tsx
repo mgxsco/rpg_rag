@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dialog'
 import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
 import { useToast } from '@/components/ui/use-toast'
-import { Save, Trash2 } from 'lucide-react'
+import { Save, Trash2, RefreshCw, Loader2 } from 'lucide-react'
 
 interface Campaign {
   id: string
@@ -36,6 +36,7 @@ export default function SettingsPage({
   const [description, setDescription] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [reindexing, setReindexing] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
 
   const router = useRouter()
@@ -80,6 +81,39 @@ export default function SettingsPage({
     }
 
     setSaving(false)
+  }
+
+  const handleReindex = async () => {
+    setReindexing(true)
+
+    try {
+      const res = await fetch(`/api/campaigns/${params.campaignId}/reindex`, {
+        method: 'POST',
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to reindex notes',
+          variant: 'destructive',
+        })
+      } else {
+        toast({
+          title: 'Reindex Complete',
+          description: data.message,
+        })
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to reindex notes',
+        variant: 'destructive',
+      })
+    }
+
+    setReindexing(false)
   }
 
   const handleDelete = async () => {
@@ -148,6 +182,26 @@ export default function SettingsPage({
               <Button onClick={handleSave} disabled={saving}>
                 <Save className="h-4 w-4 mr-2" />
                 {saving ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>AI Search</CardTitle>
+              <CardDescription>
+                Regenerate embeddings for all notes to enable AI-powered search.
+                This is required after adding VOYAGE_API_KEY or if search isn&apos;t working.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={handleReindex} disabled={reindexing} variant="outline">
+                {reindexing ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                )}
+                {reindexing ? 'Reindexing...' : 'Reindex All Notes'}
               </Button>
             </CardContent>
           </Card>
