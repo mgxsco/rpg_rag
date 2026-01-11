@@ -84,13 +84,22 @@ Use [[Note Title]] wikilink syntax to reference other notes you're creating.`,
   }
 
   try {
-    let jsonStr = textContent.text
-    const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
-    if (jsonMatch) {
-      jsonStr = jsonMatch[1]
+    let jsonStr = textContent.text.trim()
+
+    // Try to extract JSON from code blocks
+    const codeBlockMatch = jsonStr.match(/```(?:json)?[\s\n]*([\s\S]*?)```/)
+    if (codeBlockMatch) {
+      jsonStr = codeBlockMatch[1].trim()
+    } else {
+      // Try to find JSON array directly
+      const arrayMatch = jsonStr.match(/\[[\s\S]*\]/)
+      if (arrayMatch) {
+        jsonStr = arrayMatch[0]
+      }
     }
 
-    const extracted = JSON.parse(jsonStr.trim()) as ExtractedNote[]
+    console.log('[Upload] Attempting to parse JSON, first 200 chars:', jsonStr.slice(0, 200))
+    const extracted = JSON.parse(jsonStr) as ExtractedNote[]
     console.log(`[Upload] Extracted ${extracted.length} notes from content`)
 
     return extracted.filter(note =>
