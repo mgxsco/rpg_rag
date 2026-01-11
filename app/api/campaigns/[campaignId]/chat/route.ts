@@ -15,6 +15,14 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // Check if ANTHROPIC_API_KEY is configured
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return NextResponse.json({
+      content: 'Chat is not available. ANTHROPIC_API_KEY is not configured in environment variables.',
+      sources: [],
+    })
+  }
+
   // Check membership
   const membership = await db.query.campaignMembers.findFirst({
     where: and(
@@ -61,9 +69,12 @@ export async function POST(
     return NextResponse.json(response)
   } catch (error) {
     console.error('Chat error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
-      { error: 'Failed to generate response' },
-      { status: 500 }
+      {
+        content: `Error: ${errorMessage}`,
+        sources: [],
+      }
     )
   }
 }
