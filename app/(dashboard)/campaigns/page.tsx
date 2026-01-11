@@ -1,30 +1,50 @@
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+import { getSession } from '@/lib/auth'
+import { db, campaigns, campaignMembers } from '@/lib/db'
+import { eq, or, desc } from 'drizzle-orm'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Plus, Users, BookOpen } from 'lucide-react'
 
 export default async function CampaignsPage() {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const session = await getSession()
 
-  // Get campaigns where user is owner or member
-  const { data: ownedCampaigns } = await supabase
-    .from('campaigns')
-    .select('*, campaign_members(count)')
-    .eq('owner_id', user?.id)
-    .order('updated_at', { ascending: false })
+  if (!session?.user?.id) {
+    redirect('/login')
+  }
 
-  const { data: memberCampaigns } = await supabase
-    .from('campaign_members')
-    .select('campaign:campaigns(*), role')
-    .eq('user_id', user?.id)
-    .neq('campaign.owner_id', user?.id)
+  // Get owned campaigns
+  const ownedCampaigns = await db.query.campaigns.findMany({
+    where: eq(campaigns.ownerId, session.user.id),
+    with: {
+      members: true,
+    },
+    orderBy: [desc(campaigns.updatedAt)],
+  })
 
-  const campaigns = [
-    ...(ownedCampaigns || []).map(c => ({ ...c, role: 'owner' as const })),
-    ...(memberCampaigns || []).map(m => ({ ...m.campaign, role: m.role })),
+  // Get campaigns where user is a member
+  const memberships = await db.query.campaignMembers.findMany({
+    where: eq(campaignMembers.userId, session.user.id),
+    with: {
+      campaign: {
+        with: {
+          members: true,
+        },
+      },
+    },
+  })
+
+  // Combine and dedupe
+  const ownedIds = new Set(ownedCampaigns.map((c) => c.id))
+  const memberCampaigns = memberships
+    .filter((m) => !ownedIds.has(m.campaignId))
+    .map((m) => ({ ...m.campaign, role: m.role }))
+
+  const allCampaigns = [
+    ...ownedCampaigns.map((c) => ({ ...c, role: 'owner' as const })),
+    ...memberCampaigns,
   ]
 
   return (
@@ -42,7 +62,7 @@ export default async function CampaignsPage() {
         </Link>
       </div>
 
-      {campaigns.length === 0 ? (
+      {allCampaigns.length === 0 ? (
         <Card className="text-center py-12">
           <CardContent>
             <BookOpen className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
@@ -60,7 +80,7 @@ export default async function CampaignsPage() {
         </Card>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {campaigns.map((campaign) => (
+          {allCampaigns.map((campaign) => (
             <Link key={campaign.id} href={`/campaigns/${campaign.id}`}>
               <Card className="hover:border-primary transition-colors cursor-pointer h-full">
                 <CardHeader>
@@ -77,9 +97,7 @@ export default async function CampaignsPage() {
                 <CardContent>
                   <div className="flex items-center text-sm text-muted-foreground">
                     <Users className="h-4 w-4 mr-1" />
-                    <span>
-                      {campaign.campaign_members?.[0]?.count || 1} member(s)
-                    </span>
+                    <span>{campaign.members?.length || 1} member(s)</span>
                   </div>
                 </CardContent>
               </Card>

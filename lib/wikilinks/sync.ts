@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server'
+import { db, notes, noteLinks } from '@/lib/db'
+import { eq, and } from 'drizzle-orm'
 import { parseWikilinks, titleToSlug } from './parser'
 
 export interface SyncResult {
@@ -18,23 +19,21 @@ export async function syncNoteLinks(
   campaignId: string,
   content: string
 ): Promise<SyncResult> {
-  const supabase = createClient()
-
   // Parse wikilinks from content
   const links = parseWikilinks(content)
   const targetTitles = [...new Set(links.map((l) => l.target.toLowerCase()))]
 
   // Get all notes in campaign to resolve links
-  const { data: campaignNotes } = await supabase
-    .from('notes')
-    .select('id, title, slug')
-    .eq('campaign_id', campaignId)
+  const campaignNotes = await db
+    .select({ id: notes.id, title: notes.title, slug: notes.slug })
+    .from(notes)
+    .where(eq(notes.campaignId, campaignId))
 
   // Create lookup maps
   const noteByTitle = new Map<string, string>()
   const noteBySlug = new Map<string, string>()
 
-  campaignNotes?.forEach((note) => {
+  campaignNotes.forEach((note) => {
     noteByTitle.set(note.title.toLowerCase(), note.id)
     noteBySlug.set(note.slug, note.id)
   })
@@ -44,29 +43,26 @@ export async function syncNoteLinks(
   const unresolvedLinks: string[] = []
 
   for (const title of targetTitles) {
-    const noteId = noteByTitle.get(title) || noteBySlug.get(titleToSlug(title))
-    if (noteId) {
-      linkedNoteIds.push(noteId)
-    } else {
+    const resolvedNoteId = noteByTitle.get(title) || noteBySlug.get(titleToSlug(title))
+    if (resolvedNoteId && resolvedNoteId !== noteId) {
+      linkedNoteIds.push(resolvedNoteId)
+    } else if (!resolvedNoteId) {
       unresolvedLinks.push(title)
     }
   }
 
   // Delete existing links from this note
-  await supabase
-    .from('note_links')
-    .delete()
-    .eq('source_note_id', noteId)
+  await db.delete(noteLinks).where(eq(noteLinks.sourceNoteId, noteId))
 
   // Insert new links
   if (linkedNoteIds.length > 0) {
     const linkInserts = linkedNoteIds.map((targetNoteId) => ({
-      source_note_id: noteId,
-      target_note_id: targetNoteId,
-      campaign_id: campaignId,
+      sourceNoteId: noteId,
+      targetNoteId: targetNoteId,
+      campaignId: campaignId,
     }))
 
-    await supabase.from('note_links').insert(linkInserts)
+    await db.insert(noteLinks).values(linkInserts)
   }
 
   return {
@@ -79,19 +75,12 @@ export async function syncNoteLinks(
  * Get backlinks for a note (notes that link TO this note)
  */
 export async function getBacklinks(noteId: string) {
-  const supabase = createClient()
+  const backlinks = await db.query.noteLinks.findMany({
+    where: eq(noteLinks.targetNoteId, noteId),
+    with: {
+      sourceNote: true,
+    },
+  })
 
-  const { data } = await supabase
-    .from('note_links')
-    .select(`
-      source_note:notes!source_note_id(
-        id,
-        title,
-        slug,
-        note_type
-      )
-    `)
-    .eq('target_note_id', noteId)
-
-  return data?.map((link) => link.source_note).filter(Boolean) || []
+  return backlinks.map((link) => link.sourceNote).filter(Boolean)
 }

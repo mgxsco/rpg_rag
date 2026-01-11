@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getSession } from '@/lib/auth'
+import { db, campaigns, campaignMembers } from '@/lib/db'
+import { eq, and } from 'drizzle-orm'
 import { generateChatResponse } from '@/lib/ai/chat'
 import { ChatMessage } from '@/lib/types'
 
@@ -7,32 +9,33 @@ export async function POST(
   request: Request,
   { params }: { params: { campaignId: string } }
 ) {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const session = await getSession()
 
-  if (!user) {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   // Check membership
-  const { data: membership } = await supabase
-    .from('campaign_members')
-    .select('role')
-    .eq('campaign_id', params.campaignId)
-    .eq('user_id', user.id)
-    .single()
+  const membership = await db.query.campaignMembers.findFirst({
+    where: and(
+      eq(campaignMembers.campaignId, params.campaignId),
+      eq(campaignMembers.userId, session.user.id)
+    ),
+  })
 
-  const { data: campaign } = await supabase
-    .from('campaigns')
-    .select('name, owner_id')
-    .eq('id', params.campaignId)
-    .single()
+  const campaign = await db.query.campaigns.findFirst({
+    where: eq(campaigns.id, params.campaignId),
+  })
 
-  if (!membership && campaign?.owner_id !== user.id) {
+  if (!campaign) {
+    return NextResponse.json({ error: 'Campaign not found' }, { status: 404 })
+  }
+
+  if (!membership && campaign.ownerId !== session.user.id) {
     return NextResponse.json({ error: 'Not a member of this campaign' }, { status: 403 })
   }
 
-  const isDM = membership?.role === 'dm' || campaign?.owner_id === user.id
+  const isDM = membership?.role === 'dm' || campaign.ownerId === session.user.id
 
   const body = await request.json()
   const { message, history } = body as {
@@ -51,7 +54,7 @@ export async function POST(
       history || [],
       {
         isDM,
-        campaignName: campaign?.name,
+        campaignName: campaign.name,
       }
     )
 

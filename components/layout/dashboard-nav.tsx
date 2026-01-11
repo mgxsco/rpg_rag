@@ -2,8 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { User } from '@supabase/supabase-js'
-import { createClient } from '@/lib/supabase/client'
+import { signOut } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -14,25 +13,29 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Profile } from '@/lib/types'
+import { User } from '@/lib/db/schema'
 import { BookOpen, LogOut, User as UserIcon } from 'lucide-react'
 
 interface DashboardNavProps {
-  user: User
-  profile: Profile | null
+  user: {
+    id?: string
+    name?: string | null
+    email?: string | null
+    image?: string | null
+  }
+  profile: User | null | undefined
 }
 
 export function DashboardNav({ user, profile }: DashboardNavProps) {
   const router = useRouter()
-  const supabase = createClient()
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut()
+    await signOut({ redirect: false })
     router.push('/')
     router.refresh()
   }
 
-  const displayName = profile?.display_name || profile?.username || user.email?.split('@')[0] || 'User'
+  const displayName = profile?.name || user.name || user.email?.split('@')[0] || 'User'
   const initials = displayName.slice(0, 2).toUpperCase()
 
   return (

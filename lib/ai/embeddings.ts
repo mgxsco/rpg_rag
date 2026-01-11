@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
-import { createServiceClient } from '@/lib/supabase/server'
+import { db, noteEmbeddings } from '@/lib/db'
+import { eq } from 'drizzle-orm'
 import { chunkContent } from './chunker'
 
 const openai = new OpenAI({
@@ -29,13 +30,8 @@ export async function syncNoteEmbeddings(
   title: string,
   content: string
 ): Promise<void> {
-  const supabase = createServiceClient()
-
   // Delete old embeddings
-  await supabase
-    .from('note_embeddings')
-    .delete()
-    .eq('note_id', noteId)
+  await db.delete(noteEmbeddings).where(eq(noteEmbeddings.noteId, noteId))
 
   // Skip if content is empty
   if (!content.trim()) {
@@ -50,11 +46,11 @@ export async function syncNoteEmbeddings(
     try {
       const embedding = await generateEmbedding(chunk.text)
 
-      await supabase.from('note_embeddings').insert({
-        note_id: noteId,
-        campaign_id: campaignId,
-        chunk_index: chunk.index,
-        chunk_text: chunk.text,
+      await db.insert(noteEmbeddings).values({
+        noteId,
+        campaignId,
+        chunkIndex: chunk.index,
+        chunkText: chunk.text,
         embedding,
       })
     } catch (error) {
@@ -67,9 +63,5 @@ export async function syncNoteEmbeddings(
  * Delete all embeddings for a note
  */
 export async function deleteNoteEmbeddings(noteId: string): Promise<void> {
-  const supabase = createServiceClient()
-  await supabase
-    .from('note_embeddings')
-    .delete()
-    .eq('note_id', noteId)
+  await db.delete(noteEmbeddings).where(eq(noteEmbeddings.noteId, noteId))
 }

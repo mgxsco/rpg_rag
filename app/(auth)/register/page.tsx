@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { signIn } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,44 +13,63 @@ import { useToast } from '@/components/ui/use-toast'
 export default function RegisterPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [username, setUsername] = useState('')
-  const [displayName, setDisplayName] = useState('')
+  const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
-  const supabase = createClient()
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          username,
-          display_name: displayName || username,
-        },
-      },
-    })
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password }),
+      })
 
-    if (error) {
+      const data = await res.json()
+
+      if (!res.ok) {
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to register',
+          variant: 'destructive',
+        })
+        setLoading(false)
+        return
+      }
+
+      // Auto sign in after registration
+      const result = await signIn('credentials', {
+        email,
+        password,
+        redirect: false,
+      })
+
+      if (result?.error) {
+        toast({
+          title: 'Account created',
+          description: 'Please sign in with your new account',
+        })
+        router.push('/login')
+      } else {
+        toast({
+          title: 'Success',
+          description: 'Account created successfully!',
+        })
+        router.push('/campaigns')
+        router.refresh()
+      }
+    } catch (error) {
       toast({
         title: 'Error',
-        description: error.message,
+        description: 'Something went wrong',
         variant: 'destructive',
       })
       setLoading(false)
-      return
     }
-
-    toast({
-      title: 'Success',
-      description: 'Check your email for the confirmation link!',
-    })
-
-    router.push('/login')
   }
 
   return (
@@ -63,24 +82,14 @@ export default function RegisterPage() {
         <form onSubmit={handleRegister}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="name">Name</Label>
               <Input
-                id="username"
-                type="text"
-                placeholder="adventurer123"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="displayName">Display Name (optional)</Label>
-              <Input
-                id="displayName"
+                id="name"
                 type="text"
                 placeholder="The Adventurer"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
               />
             </div>
             <div className="space-y-2">
