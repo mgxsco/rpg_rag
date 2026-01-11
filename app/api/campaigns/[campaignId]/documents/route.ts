@@ -2,140 +2,15 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { db, campaigns, campaignMembers, documents, entities, relationships, entitySources } from '@/lib/db'
 import { eq, and } from 'drizzle-orm'
-import { sql } from '@vercel/postgres'
 import { runExtractionPipeline } from '@/lib/ai/extraction/pipeline'
 import { findExistingEntity, getExistingEntityNames, mergeAliases } from '@/lib/ai/extraction/dedup'
+import { ensureKnowledgeGraphTables } from '@/lib/db/migrations'
 
 // Dynamic import for pdf-parse
 async function parsePDF(buffer: Buffer): Promise<string> {
   const pdfParse = (await import('pdf-parse')).default
   const data = await pdfParse(buffer)
   return data.text
-}
-
-// Auto-migrate tables if they don't exist
-async function ensureTablesExist(): Promise<{ migrated: boolean; error?: string }> {
-  try {
-    // Check if documents table exists
-    const result = await sql`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables
-        WHERE table_name = 'documents'
-      ) as exists
-    `
-
-    // Also ensure campaigns has language column
-    await sql`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS language TEXT DEFAULT 'en' NOT NULL`
-
-    if (result.rows[0]?.exists) {
-      return { migrated: false }
-    }
-
-    // Run migration
-    console.log('[Documents] Running auto-migration...')
-
-    // Create documents table
-    await sql`
-      CREATE TABLE IF NOT EXISTS documents (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-        name TEXT NOT NULL,
-        content TEXT NOT NULL,
-        file_type TEXT,
-        uploaded_by UUID NOT NULL REFERENCES users(id),
-        created_at TIMESTAMP DEFAULT NOW() NOT NULL
-      )
-    `
-    await sql`CREATE INDEX IF NOT EXISTS documents_campaign_idx ON documents(campaign_id)`
-
-    // Create entities table
-    await sql`
-      CREATE TABLE IF NOT EXISTS entities (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-        name TEXT NOT NULL,
-        canonical_name TEXT NOT NULL,
-        entity_type TEXT NOT NULL,
-        content TEXT DEFAULT '',
-        aliases TEXT[] DEFAULT '{}',
-        tags TEXT[] DEFAULT '{}',
-        is_dm_only BOOLEAN DEFAULT false,
-        source_note_id UUID REFERENCES notes(id),
-        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
-        updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
-        UNIQUE(campaign_id, canonical_name)
-      )
-    `
-    await sql`CREATE INDEX IF NOT EXISTS entities_campaign_idx ON entities(campaign_id)`
-    await sql`CREATE INDEX IF NOT EXISTS entities_type_idx ON entities(campaign_id, entity_type)`
-
-    // Create entity_sources table
-    await sql`
-      CREATE TABLE IF NOT EXISTS entity_sources (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        entity_id UUID NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-        document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-        excerpt TEXT,
-        confidence TEXT DEFAULT '1.0',
-        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
-        UNIQUE(entity_id, document_id)
-      )
-    `
-    await sql`CREATE INDEX IF NOT EXISTS entity_sources_entity_idx ON entity_sources(entity_id)`
-
-    // Create relationships table
-    await sql`
-      CREATE TABLE IF NOT EXISTS relationships (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-        source_entity_id UUID NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-        target_entity_id UUID NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-        relationship_type TEXT NOT NULL,
-        reverse_label TEXT,
-        document_id UUID REFERENCES documents(id),
-        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
-        UNIQUE(source_entity_id, target_entity_id, relationship_type)
-      )
-    `
-    await sql`CREATE INDEX IF NOT EXISTS relationships_source_idx ON relationships(source_entity_id)`
-    await sql`CREATE INDEX IF NOT EXISTS relationships_target_idx ON relationships(target_entity_id)`
-    await sql`CREATE INDEX IF NOT EXISTS relationships_campaign_idx ON relationships(campaign_id)`
-
-    // Create chunks table
-    await sql`
-      CREATE TABLE IF NOT EXISTS chunks (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        entity_id UUID NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-        campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-        content TEXT NOT NULL,
-        chunk_index INTEGER NOT NULL,
-        header_path TEXT[] DEFAULT '{}',
-        entity_mentions TEXT[] DEFAULT '{}',
-        embedding vector(1024),
-        created_at TIMESTAMP DEFAULT NOW() NOT NULL
-      )
-    `
-    await sql`CREATE INDEX IF NOT EXISTS chunks_entity_idx ON chunks(entity_id)`
-    await sql`CREATE INDEX IF NOT EXISTS chunks_campaign_idx ON chunks(campaign_id)`
-
-    // Create entity_versions table
-    await sql`
-      CREATE TABLE IF NOT EXISTS entity_versions (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        entity_id UUID NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-        name TEXT NOT NULL,
-        content TEXT NOT NULL,
-        edited_by UUID NOT NULL REFERENCES users(id),
-        created_at TIMESTAMP DEFAULT NOW() NOT NULL
-      )
-    `
-
-    console.log('[Documents] Auto-migration complete')
-    return { migrated: true }
-  } catch (error) {
-    console.error('[Documents] Auto-migration failed:', error)
-    return { migrated: false, error: String(error) }
-  }
 }
 
 /**
@@ -174,7 +49,7 @@ export async function POST(
 
   try {
     // Auto-migrate tables if needed
-    const migration = await ensureTablesExist()
+    const migration = await ensureKnowledgeGraphTables()
     if (migration.error) {
       return NextResponse.json(
         { error: 'Database setup failed', details: migration.error },
