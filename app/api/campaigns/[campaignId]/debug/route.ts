@@ -25,7 +25,7 @@ export async function GET(
   // Check env vars
   const envStatus = {
     ANTHROPIC_API_KEY: !!process.env.ANTHROPIC_API_KEY,
-    VOYAGE_API_KEY: !!process.env.VOYAGE_API_KEY,
+    JINA_API_KEY: !!process.env.JINA_API_KEY,
     POSTGRES_URL: !!process.env.POSTGRES_URL,
   }
 

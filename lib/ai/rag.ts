@@ -18,11 +18,11 @@ export async function searchSimilarChunks(
 ): Promise<SearchResult[]> {
   console.log('[RAG] Starting search for campaign:', campaignId)
   console.log('[RAG] Query:', query)
-  console.log('[RAG] VOYAGE_API_KEY configured:', !!process.env.VOYAGE_API_KEY)
+  console.log('[RAG] JINA_API_KEY configured:', !!process.env.JINA_API_KEY)
 
-  // Check if Voyage API key is configured
-  if (!process.env.VOYAGE_API_KEY) {
-    console.log('[RAG] Skipping vector search: VOYAGE_API_KEY not configured')
+  // Check if Jina API key is configured
+  if (!process.env.JINA_API_KEY) {
+    console.log('[RAG] Skipping vector search: JINA_API_KEY not configured')
     return []
   }
 

@@ -16,10 +16,10 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Check if VOYAGE_API_KEY is configured
-  if (!process.env.VOYAGE_API_KEY) {
+  // Check if JINA_API_KEY is configured
+  if (!process.env.JINA_API_KEY) {
     return NextResponse.json({
-      error: 'VOYAGE_API_KEY is not configured. Embeddings cannot be generated.',
+      error: 'JINA_API_KEY is not configured. Embeddings cannot be generated.',
     }, { status: 400 })
   }
 

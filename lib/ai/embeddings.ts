@@ -6,29 +6,32 @@ import { chunkContent } from './chunker'
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /**
- * Generate embedding using Voyage AI (Anthropic's recommended embedding partner)
- * Uses voyage-2 model which produces 1024-dimensional embeddings
+ * Generate embedding using Jina AI
+ * Uses jina-embeddings-v3 model which produces 1024-dimensional embeddings
+ * Free tier: 1M tokens/month
  * Includes retry logic with exponential backoff for rate limit errors
  */
 export async function generateEmbedding(text: string, retries = 3): Promise<number[]> {
-  const apiKey = process.env.VOYAGE_API_KEY
+  const apiKey = process.env.JINA_API_KEY
 
   if (!apiKey) {
-    throw new Error('VOYAGE_API_KEY is not configured')
+    throw new Error('JINA_API_KEY is not configured')
   }
 
   console.log('[Embeddings] Generating embedding for text of length:', text.length)
 
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const response = await fetch('https://api.voyageai.com/v1/embeddings', {
+    const response = await fetch('https://api.jina.ai/v1/embeddings', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        input: text,
-        model: 'voyage-2',
+        input: [text],
+        model: 'jina-embeddings-v3',
+        dimensions: 1024,
+        task: 'retrieval.passage',
       }),
     })
 
@@ -40,8 +43,8 @@ export async function generateEmbedding(text: string, retries = 3): Promise<numb
 
     const errorText = await response.text()
 
-    // Check if it's a rate limit error (429 or contains rate limit message)
-    if (response.status === 429 || errorText.includes('rate limit') || errorText.includes('RPM')) {
+    // Check if it's a rate limit error
+    if (response.status === 429) {
       if (attempt < retries) {
         const waitTime = Math.pow(2, attempt + 1) * 1000 // 2s, 4s, 8s
         console.log(`[Embeddings] Rate limited, waiting ${waitTime}ms before retry ${attempt + 1}/${retries}`)
@@ -50,8 +53,8 @@ export async function generateEmbedding(text: string, retries = 3): Promise<numb
       }
     }
 
-    console.error('[Embeddings] Voyage AI error:', errorText)
-    throw new Error(`Voyage AI error: ${errorText}`)
+    console.error('[Embeddings] Jina AI error:', errorText)
+    throw new Error(`Jina AI error: ${errorText}`)
   }
 
   throw new Error('Failed to generate embedding after retries')
@@ -70,11 +73,11 @@ export async function syncNoteEmbeddings(
   content: string
 ): Promise<void> {
   console.log('[Embeddings] Syncing embeddings for note:', title)
-  console.log('[Embeddings] VOYAGE_API_KEY configured:', !!process.env.VOYAGE_API_KEY)
+  console.log('[Embeddings] JINA_API_KEY configured:', !!process.env.JINA_API_KEY)
 
-  // Check if Voyage API key is configured
-  if (!process.env.VOYAGE_API_KEY) {
-    console.log('[Embeddings] Skipping: VOYAGE_API_KEY not configured')
+  // Check if Jina API key is configured
+  if (!process.env.JINA_API_KEY) {
+    console.log('[Embeddings] Skipping: JINA_API_KEY not configured')
     return
   }
 
