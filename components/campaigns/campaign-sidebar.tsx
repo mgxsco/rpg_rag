@@ -11,6 +11,7 @@ import {
   MessageSquare,
   Settings,
   ArrowLeft,
+  BookOpen,
 } from 'lucide-react'
 
 interface CampaignSidebarProps {
@@ -29,8 +30,13 @@ export function CampaignSidebar({ campaignId, isDM }: CampaignSidebarProps) {
       exact: true,
     },
     {
+      href: `/campaigns/${campaignId}/entities`,
+      label: 'Wiki',
+      icon: BookOpen,
+    },
+    {
       href: `/campaigns/${campaignId}/notes`,
-      label: 'Notes',
+      label: 'Notes (Legacy)',
       icon: FileText,
     },
     {

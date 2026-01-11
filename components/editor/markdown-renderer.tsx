@@ -8,16 +8,18 @@ import { renderWikilinks } from '@/lib/wikilinks/parser'
 interface MarkdownRendererProps {
   content: string
   campaignId: string
-  noteMap: Map<string, string> // title.toLowerCase() -> slug
+  noteMap: Map<string, string> // title.toLowerCase() -> slug or entityId
+  isEntityMode?: boolean // Link to entities instead of notes
 }
 
 export function MarkdownRenderer({
   content,
   campaignId,
   noteMap,
+  isEntityMode = false,
 }: MarkdownRendererProps) {
   // Pre-process content to convert wikilinks to markdown links
-  const processedContent = renderWikilinks(content, noteMap, campaignId)
+  const processedContent = renderWikilinks(content, noteMap, campaignId, isEntityMode)
 
   return (
     <div className="prose-content">

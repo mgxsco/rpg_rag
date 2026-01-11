@@ -97,18 +97,22 @@ export function getCursorWikilinkContext(
  */
 export function renderWikilinks(
   content: string,
-  noteMap: Map<string, string>, // title.toLowerCase() -> slug
-  campaignId: string
+  noteMap: Map<string, string>, // title.toLowerCase() -> slug or entityId
+  campaignId: string,
+  isEntityMode: boolean = false
 ): string {
   return content.replace(
     /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g,
     (match, target, display) => {
       const targetLower = target.trim().toLowerCase()
       const displayText = (display || target).trim()
-      const slug = noteMap.get(targetLower)
+      const id = noteMap.get(targetLower)
 
-      if (slug) {
-        return `[${displayText}](/campaigns/${campaignId}/notes/${slug})`
+      if (id) {
+        const path = isEntityMode
+          ? `/campaigns/${campaignId}/entities/${id}`
+          : `/campaigns/${campaignId}/notes/${id}`
+        return `[${displayText}](${path})`
       } else {
         // Broken link - return with special marker
         return `<span class="wikilink-broken" data-target="${target.trim()}">${displayText}</span>`
