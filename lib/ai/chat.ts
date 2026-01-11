@@ -1,17 +1,17 @@
-import OpenAI from 'openai'
+import Anthropic from '@anthropic-ai/sdk'
 import { searchSimilarChunks, buildContext } from './rag'
 import { ChatMessage, SearchResult } from '@/lib/types'
 
-// Lazy-initialize OpenAI client to avoid build errors
-let openaiClient: OpenAI | null = null
+// Lazy-initialize Anthropic client to avoid build errors
+let anthropicClient: Anthropic | null = null
 
-function getOpenAI(): OpenAI {
-  if (!openaiClient) {
-    openaiClient = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
+function getAnthropic(): Anthropic {
+  if (!anthropicClient) {
+    anthropicClient = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
     })
   }
-  return openaiClient
+  return anthropicClient
 }
 
 const SYSTEM_PROMPT = `You are a helpful D&D campaign assistant. Your role is to answer questions about the campaign based on the provided context from campaign notes.
@@ -35,7 +35,7 @@ export interface ChatResponse {
 }
 
 /**
- * Generate a chat response using RAG
+ * Generate a chat response using RAG with Claude
  */
 export async function generateChatResponse(
   campaignId: string,
@@ -52,17 +52,16 @@ export async function generateChatResponse(
   // Build context from chunks
   const context = buildContext(chunks)
 
-  // Prepare messages for OpenAI
-  const messages: OpenAI.ChatCompletionMessageParam[] = [
-    {
-      role: 'system',
-      content: `${SYSTEM_PROMPT}
+  // Build the system prompt with context
+  const systemPrompt = `${SYSTEM_PROMPT}
 
 Campaign: ${options.campaignName || 'Unknown Campaign'}
 
 Context from campaign notes:
-${context}`,
-    },
+${context}`
+
+  // Prepare messages for Claude
+  const messages: Anthropic.MessageParam[] = [
     // Include recent history
     ...history.slice(-10).map((msg) => ({
       role: msg.role as 'user' | 'assistant',
@@ -74,17 +73,23 @@ ${context}`,
     },
   ]
 
-  // Generate response
-  const openai = getOpenAI()
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4o',
+  // Generate response with Claude
+  const anthropic = getAnthropic()
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 1024,
+    system: systemPrompt,
     messages,
-    temperature: 0.7,
-    max_tokens: 1000,
   })
 
+  // Extract text from response
+  const textContent = response.content.find((block) => block.type === 'text')
+  const responseText = textContent?.type === 'text'
+    ? textContent.text
+    : 'I apologize, but I was unable to generate a response.'
+
   return {
-    content: response.choices[0].message.content || 'I apologize, but I was unable to generate a response.',
+    content: responseText,
     sources: chunks,
   }
 }

@@ -1,30 +1,37 @@
-import OpenAI from 'openai'
 import { db, noteEmbeddings } from '@/lib/db'
 import { eq } from 'drizzle-orm'
 import { chunkContent } from './chunker'
 
-// Lazy-initialize OpenAI client to avoid build errors
-let openaiClient: OpenAI | null = null
-
-function getOpenAI(): OpenAI {
-  if (!openaiClient) {
-    openaiClient = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    })
-  }
-  return openaiClient
-}
-
 /**
- * Generate embedding for a text using OpenAI
+ * Generate embedding using Voyage AI (Anthropic's recommended embedding partner)
+ * Uses voyage-2 model which produces 1024-dimensional embeddings
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
-  const openai = getOpenAI()
-  const response = await openai.embeddings.create({
-    model: 'text-embedding-3-small',
-    input: text,
+  const apiKey = process.env.VOYAGE_API_KEY
+
+  if (!apiKey) {
+    throw new Error('VOYAGE_API_KEY is not configured')
+  }
+
+  const response = await fetch('https://api.voyageai.com/v1/embeddings', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      input: text,
+      model: 'voyage-2',
+    }),
   })
-  return response.data[0].embedding
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Voyage AI error: ${error}`)
+  }
+
+  const data = await response.json()
+  return data.data[0].embedding
 }
 
 /**
@@ -39,6 +46,12 @@ export async function syncNoteEmbeddings(
   title: string,
   content: string
 ): Promise<void> {
+  // Check if Voyage API key is configured
+  if (!process.env.VOYAGE_API_KEY) {
+    console.log('Skipping embeddings: VOYAGE_API_KEY not configured')
+    return
+  }
+
   // Delete old embeddings
   await db.delete(noteEmbeddings).where(eq(noteEmbeddings.noteId, noteId))
 

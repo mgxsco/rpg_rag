@@ -130,7 +130,7 @@ export async function GET() {
         campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
         chunk_index INTEGER NOT NULL,
         chunk_text TEXT NOT NULL,
-        embedding vector(1536)
+        embedding vector(1024)
       )
     `
 

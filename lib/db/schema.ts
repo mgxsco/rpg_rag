@@ -193,7 +193,7 @@ export const noteEmbeddings = pgTable(
       .references(() => campaigns.id, { onDelete: 'cascade' }),
     chunkIndex: integer('chunk_index').notNull(),
     chunkText: text('chunk_text').notNull(),
-    embedding: vector('embedding', { dimensions: 1536 }),
+    embedding: vector('embedding', { dimensions: 1024 }),
   },
   (table) => ({
     campaignIdx: index('embeddings_campaign_idx').on(table.campaignId),
