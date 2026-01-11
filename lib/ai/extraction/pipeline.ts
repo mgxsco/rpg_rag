@@ -72,7 +72,7 @@ function getLanguageName(code: string): string {
 // Chunk document into smaller pieces
 // ============================================
 
-function chunkDocument(content: string, maxChunkSize: number = 8000): string[] {
+function chunkDocument(content: string, maxChunkSize: number = 4000): string[] {
   const chunks: string[] = []
 
   // Try to split on paragraph breaks
@@ -144,61 +144,95 @@ async function extractFromChunk(
   const response = await anthropic.messages.create({
     model: 'claude-3-5-haiku-20241022',
     max_tokens: 8192,
-    system: `You are a meticulous D&D/RPG wiki curator extracting EVERY entity from campaign content. Your job is to identify ALL named elements, even those mentioned briefly or in passing.
+    system: `You are an OBSESSIVE wiki curator. Extract ABSOLUTELY EVERYTHING from this RPG/D&D content. Miss NOTHING.
 ${languageInstruction}
 
-ENTITY TYPES (be generous in classification):
-- npc: ANY named character (villains, shopkeepers, guards, mentioned ancestors, gods, etc.)
-- location: ANY named place (cities, rooms, dungeons, forests, mountains, planes, buildings, etc.)
-- item: ANY named object (weapons, artifacts, potions, keys, books, clothing, vehicles, etc.)
-- quest: ANY mission, objective, task, or goal mentioned
-- faction: ANY group, organization, guild, army, cult, family, species, etc.
-- lore: Historical events, legends, prophecies, myths, calendar dates, customs
-- session: Session summaries or play recaps
-- player_character: Player characters
-- freeform: Anything else notable (spells, abilities, concepts, titles, etc.)
+EXTRACT THESE AS ENTITIES:
 
-RELATIONSHIP TYPES:
-lives_in, member_of, owns, created, enemy_of, ally_of, located_in, participated_in, mentioned_in, related_to, knows, serves, rules, guards, seeks, fears, loves, hates, works_for, parent_of, child_of, sibling_of, married_to, worships, leads, follows, created_by, contains, part_of
+NPCs - Extract ALL of these:
+- Named characters (Gandalf, Lord Vex, Captain Maya)
+- Unnamed but titled characters ("the old wizard", "the bartender" → create name like "The Old Wizard")
+- Characters only mentioned ("my father", "the king who died" → "Father of [Character]", "The Dead King")
+- Gods, demons, spirits, ghosts
+- Ancestors, historical figures
+- Anyone spoken about in dialogue
 
-EXTRACTION RULES - BE AGGRESSIVE:
-1. Extract EVERY proper noun and named thing, even if mentioned once
-2. Include characters mentioned in dialogue or backstory
-3. Include places referenced but not visited
-4. Include items described or hinted at
-5. Include organizations mentioned in passing
-6. Include historical figures and events
-7. Include deities, spirits, and supernatural entities
-8. Include species, races, and creature types as factions
-9. When in doubt, INCLUDE IT
+LOCATIONS - Extract ALL of these:
+- Cities, towns, villages
+- Buildings (taverns, temples, shops, houses)
+- Rooms within buildings
+- Dungeons, caves, ruins
+- Geographic features (mountains, rivers, forests)
+- Regions, kingdoms, continents
+- Planes of existence
+- Places only mentioned ("the city where I was born" → create entry)
 
-DESCRIPTION GUIDELINES (3-6 sentences):
-- What is known about this entity from the text
-- Physical details if described
-- Personality or characteristics if evident
-- Role or significance in the story
-- Connections to other entities
-- Any mysteries or unknowns
+ITEMS - Extract ALL of these:
+- Weapons (swords, bows, magical staves)
+- Armor and clothing
+- Potions, scrolls, books
+- Keys, tools, mundane objects if named
+- Artifacts and relics
+- Vehicles, mounts
+- Currency types if named
+- Food/drink if named
+
+FACTIONS - Extract ALL of these:
+- Guilds, orders, organizations
+- Armies, militias
+- Cults, religions
+- Families, clans, dynasties
+- Species/races (Elves, Dwarves, Goblins)
+- Monster types as groups
+- Political parties
+
+LORE - Extract ALL of these:
+- Historical events ("The Great War", "The Sundering")
+- Prophecies, legends
+- Calendar systems, holidays
+- Customs, traditions
+- Magic systems or schools
+- Languages mentioned
+
+QUESTS - Extract ALL of these:
+- Main objectives
+- Side missions
+- Rumors of tasks
+- Bounties, contracts
+- Personal goals mentioned
+
+FREEFORM - Extract ALL of these:
+- Spells by name
+- Abilities, skills
+- Titles, epithets
+- Concepts unique to the world
+- Diseases, curses
+- Materials (mithril, dragonscale)
+
+EXAMPLE - From "The party met Grok at the Rusty Nail tavern in Millbrook. He mentioned his brother was killed by the Shadow Guild."
+Extract: Grok (npc), Rusty Nail (location), Millbrook (location), Grok's Brother (npc), Shadow Guild (faction), Murder of Grok's Brother (lore)
+
+RELATIONSHIPS: lives_in, member_of, owns, created, enemy_of, ally_of, located_in, participated_in, mentioned_in, related_to, knows, serves, rules, guards, seeks, fears, loves, hates, works_for, parent_of, child_of, sibling_of, married_to, worships, leads, follows, created_by, contains, part_of, killed_by, visited, hired_by
 
 Return ONLY valid JSON:
 {
   "entities": [{
-    "name": "Entity Name (use exact name from text)",
+    "name": "Exact Name",
     "type": "npc|location|item|quest|faction|lore|session|player_character|freeform",
-    "aliases": ["nicknames", "titles", "alternate spellings"],
-    "description": "Everything known about this entity from the text",
+    "aliases": ["other names"],
+    "description": "All known information (2-4 sentences)",
     "confidence": 0.5-1.0
   }],
   "relationships": [{
-    "sourceEntity": "Entity Name",
-    "targetEntity": "Other Entity",
-    "relationshipType": "relationship_type",
-    "reverseLabel": "reverse label",
-    "excerpt": "quote or context from text"
+    "sourceEntity": "Name",
+    "targetEntity": "Name",
+    "relationshipType": "type",
+    "reverseLabel": "reverse",
+    "excerpt": "context"
   }]
 }
 
-REMEMBER: It's better to extract too many entities than to miss important ones. A thorough wiki captures everything!`,
+CRITICAL: Extract 20-50+ entities from typical session notes. If you extract fewer than 10, you are missing things. Every noun could be an entity!`,
     messages: [{
       role: 'user',
       content: content,
@@ -415,6 +449,9 @@ function generateWikiContent(
     created_by: 'Created by',
     contains: 'Contains',
     part_of: 'Part of',
+    killed_by: 'Killed by',
+    visited: 'Visited',
+    hired_by: 'Hired by',
   }
 
   const label = typeLabels[mention.type] || 'Entry'
@@ -495,8 +532,8 @@ export async function runExtractionPipeline(
   console.log(`[Extraction] Content length: ${content.length} chars, language: ${language}`)
   console.log(`[Extraction] Existing entities: ${existingEntityNames.length}`)
 
-  // Chunk the document
-  const chunks = chunkDocument(content, 8000)
+  // Chunk the document (smaller chunks = more detailed extraction)
+  const chunks = chunkDocument(content, 4000)
   console.log(`[Extraction] Split into ${chunks.length} chunks`)
 
   onProgress?.({
