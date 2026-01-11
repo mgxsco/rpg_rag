@@ -73,7 +73,8 @@ export default function EditNotePage({
         const res = await fetch(`/api/campaigns/${params.campaignId}/notes`)
         if (res.ok) {
           const data = await res.json()
-          setAllNotes(data.map((n: any) => ({ title: n.title, slug: n.slug })))
+          const notesList = data.notes || data
+          setAllNotes(notesList.map((n: any) => ({ title: n.title, slug: n.slug })))
         }
       } catch (error) {
         console.error('Failed to load notes:', error)
