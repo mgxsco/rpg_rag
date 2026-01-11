@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { db, campaigns, campaignMembers, documents, entities, relationships, entitySources, chunks } from '@/lib/db'
+import { db, campaigns, campaignMembers, documents, entities, relationships, entitySources } from '@/lib/db'
 import { eq, and } from 'drizzle-orm'
 import { runExtractionPipeline } from '@/lib/ai/extraction/pipeline'
 import { findExistingEntity, getExistingEntityNames, mergeAliases } from '@/lib/ai/extraction/dedup'
-import { syncEntityEmbeddings } from '@/lib/ai/entity-embeddings'
 
 // Dynamic import for pdf-parse
 async function parsePDF(buffer: Buffer): Promise<string> {
@@ -181,12 +180,8 @@ export async function POST(
             confidence: '1.0',
           })
 
-          // Generate embeddings for the entity
-          try {
-            await syncEntityEmbeddings(newEntity.id, params.campaignId, extracted.name, extracted.content)
-          } catch (embError) {
-            console.error(`[Documents] Failed to generate embeddings for ${extracted.name}:`, embError)
-          }
+          // Skip embedding generation during upload (too slow)
+          // Embeddings will be generated on-demand or via background job
 
           createdEntities.push({
             id: newEntity.id,
