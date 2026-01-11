@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -48,49 +48,50 @@ export default function EditNotePage({
 
   const router = useRouter()
   const { toast } = useToast()
-  const supabase = createClient()
+  const { data: session } = useSession()
 
   useEffect(() => {
     const loadNote = async () => {
-      const { data } = await supabase
-        .from('notes')
-        .select('*')
-        .eq('campaign_id', params.campaignId)
-        .eq('slug', params.slug)
-        .single()
-
-      if (data) {
-        setNote(data)
-        setTitle(data.title)
-        setContent(data.content)
-        setNoteType(data.note_type)
-        setTags(data.tags?.join(', ') || '')
-        setIsDmOnly(data.is_dm_only)
+      try {
+        const res = await fetch(`/api/campaigns/${params.campaignId}/notes/${params.slug}`)
+        if (res.ok) {
+          const data = await res.json()
+          setNote(data)
+          setTitle(data.title)
+          setContent(data.content)
+          setNoteType(data.noteType)
+          setTags(data.tags?.join(', ') || '')
+          setIsDmOnly(data.isDmOnly)
+        }
+      } catch (error) {
+        console.error('Failed to load note:', error)
       }
     }
 
     const loadAllNotes = async () => {
-      const { data } = await supabase
-        .from('notes')
-        .select('title, slug')
-        .eq('campaign_id', params.campaignId)
-
-      if (data) {
-        setAllNotes(data)
+      try {
+        const res = await fetch(`/api/campaigns/${params.campaignId}/notes`)
+        if (res.ok) {
+          const data = await res.json()
+          setAllNotes(data.map((n: any) => ({ title: n.title, slug: n.slug })))
+        }
+      } catch (error) {
+        console.error('Failed to load notes:', error)
       }
     }
 
-    loadNote()
-    loadAllNotes()
-  }, [params.campaignId, params.slug, supabase])
+    if (session?.user) {
+      loadNote()
+      loadAllNotes()
+    }
+  }, [params.campaignId, params.slug, session])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!note) return
     setLoading(true)
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
+    if (!session?.user) {
       toast({
         title: 'Error',
         description: 'You must be logged in',
@@ -100,52 +101,51 @@ export default function EditNotePage({
       return
     }
 
-    // Save version first
-    await supabase.from('note_versions').insert({
-      note_id: note.id,
-      title: note.title,
-      content: note.content,
-      edited_by: user.id,
-    })
-
     const tagArray = tags
       .split(',')
       .map((t) => t.trim())
       .filter(Boolean)
 
-    const { error } = await supabase
-      .from('notes')
-      .update({
-        title,
-        content,
-        note_type: noteType,
-        tags: tagArray,
-        is_dm_only: isDmOnly,
+    try {
+      const res = await fetch(`/api/campaigns/${params.campaignId}/notes/${params.slug}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          content,
+          noteType,
+          tags: tagArray,
+          isDmOnly,
+        }),
       })
-      .eq('id', note.id)
 
-    if (error) {
+      const data = await res.json()
+
+      if (!res.ok) {
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to update note',
+          variant: 'destructive',
+        })
+        setLoading(false)
+        return
+      }
+
+      toast({
+        title: 'Success',
+        description: 'Note updated successfully!',
+      })
+
+      router.push(`/campaigns/${params.campaignId}/notes/${params.slug}`)
+      router.refresh()
+    } catch (error) {
       toast({
         title: 'Error',
-        description: error.message,
+        description: 'Something went wrong',
         variant: 'destructive',
       })
       setLoading(false)
-      return
     }
-
-    // Sync wikilinks and embeddings via API
-    await fetch(`/api/notes/${note.id}/sync`, {
-      method: 'POST',
-    })
-
-    toast({
-      title: 'Success',
-      description: 'Note updated successfully!',
-    })
-
-    router.push(`/campaigns/${params.campaignId}/notes/${params.slug}`)
-    router.refresh()
   }
 
   if (!note) {

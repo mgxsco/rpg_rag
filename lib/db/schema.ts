@@ -8,10 +8,25 @@ import {
   primaryKey,
   unique,
   index,
-  vector,
-  real,
+  customType,
 } from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
+
+// Custom vector type for pgvector
+const vector = customType<{ data: number[]; driverData: string }>({
+  dataType(config) {
+    return `vector(${(config as any)?.dimensions ?? 1536})`
+  },
+  fromDriver(value: string): number[] {
+    return value
+      .slice(1, -1)
+      .split(',')
+      .map((v) => parseFloat(v))
+  },
+  toDriver(value: number[]): string {
+    return `[${value.join(',')}]`
+  },
+})
 
 // NextAuth.js tables
 export const users = pgTable('users', {

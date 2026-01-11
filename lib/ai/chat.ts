@@ -2,9 +2,17 @@ import OpenAI from 'openai'
 import { searchSimilarChunks, buildContext } from './rag'
 import { ChatMessage, SearchResult } from '@/lib/types'
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
+// Lazy-initialize OpenAI client to avoid build errors
+let openaiClient: OpenAI | null = null
+
+function getOpenAI(): OpenAI {
+  if (!openaiClient) {
+    openaiClient = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    })
+  }
+  return openaiClient
+}
 
 const SYSTEM_PROMPT = `You are a helpful D&D campaign assistant. Your role is to answer questions about the campaign based on the provided context from campaign notes.
 
@@ -67,6 +75,7 @@ ${context}`,
   ]
 
   // Generate response
+  const openai = getOpenAI()
   const response = await openai.chat.completions.create({
     model: 'gpt-4o',
     messages,

@@ -1,5 +1,8 @@
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+import { getSession } from '@/lib/auth'
+import { db, campaigns, campaignMembers, notes } from '@/lib/db'
+import { eq, and, desc, ilike } from 'drizzle-orm'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -27,43 +30,46 @@ export default async function NotesPage({
   params: { campaignId: string }
   searchParams: { type?: string; search?: string }
 }) {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const session = await getSession()
+  if (!session?.user?.id) {
+    redirect('/login')
+  }
 
-  const { data: campaign } = await supabase
-    .from('campaigns')
-    .select('*')
-    .eq('id', params.campaignId)
-    .single()
+  const campaign = await db.query.campaigns.findFirst({
+    where: eq(campaigns.id, params.campaignId),
+  })
 
-  const { data: membership } = await supabase
-    .from('campaign_members')
-    .select('role')
-    .eq('campaign_id', params.campaignId)
-    .eq('user_id', user?.id)
-    .single()
+  const membership = await db.query.campaignMembers.findFirst({
+    where: and(
+      eq(campaignMembers.campaignId, params.campaignId),
+      eq(campaignMembers.userId, session.user.id)
+    ),
+  })
 
-  const isDM = membership?.role === 'dm' || campaign?.owner_id === user?.id
+  const isDM = membership?.role === 'dm' || campaign?.ownerId === session.user.id
 
-  let query = supabase
-    .from('notes')
-    .select('*')
-    .eq('campaign_id', params.campaignId)
-    .order('updated_at', { ascending: false })
+  // Get notes
+  let allNotes = await db
+    .select()
+    .from(notes)
+    .where(eq(notes.campaignId, params.campaignId))
+    .orderBy(desc(notes.updatedAt))
 
+  // Filter by type
   if (searchParams.type) {
-    query = query.eq('note_type', searchParams.type)
+    allNotes = allNotes.filter((n) => n.noteType === searchParams.type)
   }
 
+  // Filter by search
   if (searchParams.search) {
-    query = query.ilike('title', `%${searchParams.search}%`)
+    const searchLower = searchParams.search.toLowerCase()
+    allNotes = allNotes.filter((n) => n.title.toLowerCase().includes(searchLower))
   }
 
+  // Filter DM-only for non-DMs
   if (!isDM) {
-    query = query.eq('is_dm_only', false)
+    allNotes = allNotes.filter((n) => !n.isDmOnly)
   }
-
-  const { data: notes } = await query
 
   return (
     <div className="flex gap-6">
@@ -118,9 +124,9 @@ export default async function NotesPage({
           </div>
         </div>
 
-        {notes && notes.length > 0 ? (
+        {allNotes.length > 0 ? (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {notes.map((note) => (
+            {allNotes.map((note) => (
               <NoteCard
                 key={note.id}
                 note={note}

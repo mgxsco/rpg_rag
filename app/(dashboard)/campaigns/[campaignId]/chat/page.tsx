@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useState, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
 import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
 import { ChatInterface } from '@/components/chat/chat-interface'
 import { ChatMessage } from '@/lib/types'
@@ -13,35 +13,27 @@ export default function ChatPage({
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isDM, setIsDM] = useState(false)
-  const [campaignName, setCampaignName] = useState('')
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
+  const { data: session } = useSession()
 
   useEffect(() => {
     const loadCampaignData = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!session?.user) return
 
-      const { data: campaign } = await supabase
-        .from('campaigns')
-        .select('name, owner_id')
-        .eq('id', params.campaignId)
-        .single()
-
-      const { data: membership } = await supabase
-        .from('campaign_members')
-        .select('role')
-        .eq('campaign_id', params.campaignId)
-        .eq('user_id', user.id)
-        .single()
-
-      setCampaignName(campaign?.name || '')
-      setIsDM(membership?.role === 'dm' || campaign?.owner_id === user.id)
+      try {
+        const res = await fetch(`/api/campaigns/${params.campaignId}`)
+        if (res.ok) {
+          const data = await res.json()
+          setIsDM(data.isDM)
+        }
+      } catch (error) {
+        console.error('Failed to load campaign:', error)
+      }
       setLoading(false)
     }
 
     loadCampaignData()
-  }, [params.campaignId, supabase])
+  }, [params.campaignId, session])
 
   const handleSendMessage = async (content: string) => {
     const userMessage: ChatMessage = { role: 'user', content }

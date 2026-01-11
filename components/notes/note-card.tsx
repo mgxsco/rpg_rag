@@ -11,7 +11,7 @@ interface NoteCardProps {
 
 export function NoteCard({ note, campaignId }: NoteCardProps) {
   // Get first 150 chars of content for preview
-  const preview = note.content
+  const preview = (note.content || '')
     .replace(/[#*_\[\]]/g, '')
     .slice(0, 150)
     .trim()
@@ -22,13 +22,13 @@ export function NoteCard({ note, campaignId }: NoteCardProps) {
         <CardHeader className="pb-2">
           <div className="flex items-start justify-between gap-2">
             <CardTitle className="text-lg line-clamp-1">{note.title}</CardTitle>
-            {note.is_dm_only && (
+            {note.isDmOnly && (
               <Lock className="h-4 w-4 text-muted-foreground shrink-0" />
             )}
           </div>
           <div className="flex flex-wrap gap-1">
-            <Badge variant="outline" className={`note-type-${note.note_type}`}>
-              {note.note_type.replace('_', ' ')}
+            <Badge variant="outline" className={`note-type-${note.noteType}`}>
+              {note.noteType.replace('_', ' ')}
             </Badge>
             {note.tags?.slice(0, 2).map((tag) => (
               <Badge key={tag} variant="secondary" className="text-xs">
@@ -47,7 +47,7 @@ export function NoteCard({ note, campaignId }: NoteCardProps) {
             {preview || 'No content'}
           </p>
           <p className="text-xs text-muted-foreground mt-2">
-            Updated {new Date(note.updated_at).toLocaleDateString()}
+            Updated {new Date(note.updatedAt).toLocaleDateString()}
           </p>
         </CardContent>
       </Card>

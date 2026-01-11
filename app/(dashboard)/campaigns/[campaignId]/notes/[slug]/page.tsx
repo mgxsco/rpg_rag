@@ -1,9 +1,11 @@
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { notFound, redirect } from 'next/navigation'
+import { getSession } from '@/lib/auth'
+import { db, campaigns, campaignMembers, notes } from '@/lib/db'
+import { eq, and } from 'drizzle-orm'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
 import { MarkdownRenderer } from '@/components/editor/markdown-renderer'
 import { BacklinksPanel } from '@/components/notes/backlinks-panel'
@@ -14,47 +16,47 @@ export default async function NoteViewPage({
 }: {
   params: { campaignId: string; slug: string }
 }) {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const session = await getSession()
+  if (!session?.user?.id) {
+    redirect('/login')
+  }
 
-  const { data: campaign } = await supabase
-    .from('campaigns')
-    .select('*')
-    .eq('id', params.campaignId)
-    .single()
+  const campaign = await db.query.campaigns.findFirst({
+    where: eq(campaigns.id, params.campaignId),
+  })
 
-  const { data: membership } = await supabase
-    .from('campaign_members')
-    .select('role')
-    .eq('campaign_id', params.campaignId)
-    .eq('user_id', user?.id)
-    .single()
+  const membership = await db.query.campaignMembers.findFirst({
+    where: and(
+      eq(campaignMembers.campaignId, params.campaignId),
+      eq(campaignMembers.userId, session.user.id)
+    ),
+  })
 
-  const isDM = membership?.role === 'dm' || campaign?.owner_id === user?.id
+  const isDM = membership?.role === 'dm' || campaign?.ownerId === session.user.id
 
-  const { data: note } = await supabase
-    .from('notes')
-    .select('*')
-    .eq('campaign_id', params.campaignId)
-    .eq('slug', params.slug)
-    .single()
+  const note = await db.query.notes.findFirst({
+    where: and(
+      eq(notes.campaignId, params.campaignId),
+      eq(notes.slug, params.slug)
+    ),
+  })
 
   if (!note) {
     notFound()
   }
 
   // Check if non-DM is trying to access DM-only note
-  if (note.is_dm_only && !isDM) {
+  if (note.isDmOnly && !isDM) {
     notFound()
   }
 
   // Get all notes for wikilink resolution
-  const { data: allNotes } = await supabase
-    .from('notes')
-    .select('title, slug')
-    .eq('campaign_id', params.campaignId)
+  const allNotes = await db
+    .select({ title: notes.title, slug: notes.slug })
+    .from(notes)
+    .where(eq(notes.campaignId, params.campaignId))
 
-  const noteMap = new Map(allNotes?.map((n) => [n.title.toLowerCase(), n.slug]) || [])
+  const noteMap = new Map(allNotes.map((n) => [n.title.toLowerCase(), n.slug]))
 
   return (
     <div className="flex gap-6">
@@ -75,13 +77,13 @@ export default async function NoteViewPage({
               <div>
                 <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
                   {note.title}
-                  {note.is_dm_only && (
+                  {note.isDmOnly && (
                     <Lock className="h-5 w-5 text-muted-foreground" />
                   )}
                 </h1>
                 <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline" className={`note-type-${note.note_type}`}>
-                    {note.note_type.replace('_', ' ')}
+                  <Badge variant="outline" className={`note-type-${note.noteType}`}>
+                    {note.noteType.replace('_', ' ')}
                   </Badge>
                   {note.tags?.map((tag: string) => (
                     <Badge key={tag} variant="secondary">
@@ -108,14 +110,14 @@ export default async function NoteViewPage({
               )}
             </div>
             <p className="text-sm text-muted-foreground">
-              Last updated {new Date(note.updated_at).toLocaleString()}
+              Last updated {new Date(note.updatedAt).toLocaleString()}
             </p>
           </header>
 
           <Card className="mb-6">
             <CardContent className="pt-6">
               <MarkdownRenderer
-                content={note.content}
+                content={note.content || ''}
                 campaignId={params.campaignId}
                 noteMap={noteMap}
               />

@@ -1,6 +1,8 @@
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { notFound, redirect } from 'next/navigation'
+import { getSession } from '@/lib/auth'
+import { db, campaigns, campaignMembers, notes } from '@/lib/db'
+import { eq, and, desc } from 'drizzle-orm'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -12,45 +14,51 @@ export default async function CampaignHomePage({
 }: {
   params: { campaignId: string }
 }) {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const session = await getSession()
+  if (!session?.user?.id) {
+    redirect('/login')
+  }
 
-  const { data: campaign } = await supabase
-    .from('campaigns')
-    .select('*')
-    .eq('id', params.campaignId)
-    .single()
+  const campaign = await db.query.campaigns.findFirst({
+    where: eq(campaigns.id, params.campaignId),
+  })
 
   if (!campaign) {
     notFound()
   }
 
-  const { data: membership } = await supabase
-    .from('campaign_members')
-    .select('role')
-    .eq('campaign_id', params.campaignId)
-    .eq('user_id', user?.id)
-    .single()
+  const membership = await db.query.campaignMembers.findFirst({
+    where: and(
+      eq(campaignMembers.campaignId, params.campaignId),
+      eq(campaignMembers.userId, session.user.id)
+    ),
+  })
 
-  const isDM = membership?.role === 'dm' || campaign.owner_id === user?.id
+  const isDM = membership?.role === 'dm' || campaign.ownerId === session.user.id
 
   // Get counts
-  const { count: notesCount } = await supabase
-    .from('notes')
-    .select('*', { count: 'exact', head: true })
-    .eq('campaign_id', params.campaignId)
+  const allNotes = await db
+    .select()
+    .from(notes)
+    .where(eq(notes.campaignId, params.campaignId))
 
-  const { count: membersCount } = await supabase
-    .from('campaign_members')
-    .select('*', { count: 'exact', head: true })
-    .eq('campaign_id', params.campaignId)
+  const members = await db
+    .select()
+    .from(campaignMembers)
+    .where(eq(campaignMembers.campaignId, params.campaignId))
 
   // Get recent notes
-  const { data: recentNotes } = await supabase
-    .from('notes')
-    .select('id, title, slug, note_type, updated_at')
-    .eq('campaign_id', params.campaignId)
-    .order('updated_at', { ascending: false })
+  const recentNotes = await db
+    .select({
+      id: notes.id,
+      title: notes.title,
+      slug: notes.slug,
+      noteType: notes.noteType,
+      updatedAt: notes.updatedAt,
+    })
+    .from(notes)
+    .where(eq(notes.campaignId, params.campaignId))
+    .orderBy(desc(notes.updatedAt))
     .limit(5)
 
   return (
@@ -74,13 +82,13 @@ export default async function CampaignHomePage({
           <StatCard
             icon={<FileText className="h-5 w-5" />}
             label="Notes"
-            value={notesCount || 0}
+            value={allNotes.length}
             href={`/campaigns/${params.campaignId}/notes`}
           />
           <StatCard
             icon={<Users className="h-5 w-5" />}
             label="Members"
-            value={membersCount || 0}
+            value={members.length}
             href={`/campaigns/${params.campaignId}/settings`}
           />
           <StatCard
@@ -112,7 +120,7 @@ export default async function CampaignHomePage({
               </Link>
             </CardHeader>
             <CardContent>
-              {recentNotes && recentNotes.length > 0 ? (
+              {recentNotes.length > 0 ? (
                 <div className="space-y-3">
                   {recentNotes.map((note) => (
                     <Link
@@ -121,13 +129,13 @@ export default async function CampaignHomePage({
                       className="flex items-center justify-between p-2 rounded hover:bg-muted transition-colors"
                     >
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className={`note-type-${note.note_type}`}>
-                          {note.note_type}
+                        <Badge variant="outline" className={`note-type-${note.noteType}`}>
+                          {note.noteType}
                         </Badge>
                         <span className="font-medium">{note.title}</span>
                       </div>
                       <span className="text-sm text-muted-foreground">
-                        {new Date(note.updated_at).toLocaleDateString()}
+                        {new Date(note.updatedAt).toLocaleDateString()}
                       </span>
                     </Link>
                   ))}

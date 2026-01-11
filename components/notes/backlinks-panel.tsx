@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft } from 'lucide-react'
@@ -11,7 +10,7 @@ interface BacklinkNote {
   id: string
   title: string
   slug: string
-  note_type: string
+  noteType: string
 }
 
 interface BacklinksPanelProps {
@@ -22,32 +21,23 @@ interface BacklinksPanelProps {
 export function BacklinksPanel({ noteId, campaignId }: BacklinksPanelProps) {
   const [backlinks, setBacklinks] = useState<BacklinkNote[]>([])
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
 
   useEffect(() => {
     const loadBacklinks = async () => {
-      const { data } = await supabase
-        .from('note_links')
-        .select(`
-          source_note:notes!source_note_id(
-            id,
-            title,
-            slug,
-            note_type
-          )
-        `)
-        .eq('target_note_id', noteId)
-
-      const notes = data
-        ?.map((link) => link.source_note as unknown as BacklinkNote)
-        .filter(Boolean) || []
-
-      setBacklinks(notes)
+      try {
+        const res = await fetch(`/api/campaigns/${campaignId}/notes/${noteId}/backlinks`)
+        if (res.ok) {
+          const data = await res.json()
+          setBacklinks(data.backlinks || [])
+        }
+      } catch (error) {
+        console.error('Failed to load backlinks:', error)
+      }
       setLoading(false)
     }
 
     loadBacklinks()
-  }, [noteId, supabase])
+  }, [noteId, campaignId])
 
   if (loading) {
     return null
@@ -73,8 +63,8 @@ export function BacklinksPanel({ noteId, campaignId }: BacklinksPanelProps) {
               href={`/campaigns/${campaignId}/notes/${note.slug}`}
               className="flex items-center gap-2 p-2 rounded hover:bg-muted transition-colors"
             >
-              <Badge variant="outline" className={`note-type-${note.note_type}`}>
-                {note.note_type.replace('_', ' ')}
+              <Badge variant="outline" className={`note-type-${note.noteType}`}>
+                {note.noteType.replace('_', ' ')}
               </Badge>
               <span className="font-medium">{note.title}</span>
             </Link>

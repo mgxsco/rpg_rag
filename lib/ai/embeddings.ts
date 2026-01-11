@@ -3,14 +3,23 @@ import { db, noteEmbeddings } from '@/lib/db'
 import { eq } from 'drizzle-orm'
 import { chunkContent } from './chunker'
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
+// Lazy-initialize OpenAI client to avoid build errors
+let openaiClient: OpenAI | null = null
+
+function getOpenAI(): OpenAI {
+  if (!openaiClient) {
+    openaiClient = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    })
+  }
+  return openaiClient
+}
 
 /**
  * Generate embedding for a text using OpenAI
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
+  const openai = getOpenAI()
   const response = await openai.embeddings.create({
     model: 'text-embedding-3-small',
     input: text,

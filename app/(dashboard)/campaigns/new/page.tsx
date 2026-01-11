@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,58 +17,44 @@ export default function NewCampaignPage() {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
-  const supabase = createClient()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
+    try {
+      const res = await fetch('/api/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, description }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to create campaign',
+          variant: 'destructive',
+        })
+        setLoading(false)
+        return
+      }
+
+      toast({
+        title: 'Success',
+        description: 'Campaign created successfully!',
+      })
+
+      router.push(`/campaigns/${data.id}`)
+    } catch (error) {
       toast({
         title: 'Error',
-        description: 'You must be logged in to create a campaign',
+        description: 'Something went wrong',
         variant: 'destructive',
       })
       setLoading(false)
-      return
     }
-
-    const { data: campaign, error } = await supabase
-      .from('campaigns')
-      .insert({
-        name,
-        description,
-        owner_id: user.id,
-      })
-      .select()
-      .single()
-
-    if (error) {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive',
-      })
-      setLoading(false)
-      return
-    }
-
-    // Add owner as DM member
-    await supabase
-      .from('campaign_members')
-      .insert({
-        campaign_id: campaign.id,
-        user_id: user.id,
-        role: 'dm',
-      })
-
-    toast({
-      title: 'Success',
-      description: 'Campaign created successfully!',
-    })
-
-    router.push(`/campaigns/${campaign.id}`)
   }
 
   return (
