@@ -2,13 +2,13 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { db, campaigns, campaignMembers, notes } from '@/lib/db'
-import { eq, and, desc, ilike } from 'drizzle-orm'
-import { Button } from '@/components/ui/button'
+import { eq, and, desc } from 'drizzle-orm'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
 import { NoteCard } from '@/components/notes/note-card'
-import { Plus, Search, Filter } from 'lucide-react'
+import { NotesActions } from '@/components/notes/notes-actions'
+import { Search, Filter } from 'lucide-react'
 import { NoteType } from '@/lib/types'
 
 const NOTE_TYPES: { value: NoteType; label: string }[] = [
@@ -78,12 +78,7 @@ export default async function NotesPage({
       <div className="flex-1">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold">Notes</h1>
-          <Link href={`/campaigns/${params.campaignId}/notes/new`}>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              New Note
-            </Button>
-          </Link>
+          <NotesActions campaignId={params.campaignId} />
         </div>
 
         <div className="flex flex-wrap gap-4 mb-6">
