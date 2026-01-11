@@ -70,15 +70,21 @@ export async function PUT(
   }
 
   const body = await request.json()
-  const { name, description } = body
+  const { name, description, language } = body
+
+  const updateData: Record<string, any> = {
+    name,
+    description,
+    updatedAt: new Date(),
+  }
+
+  if (language) {
+    updateData.language = language
+  }
 
   const [updated] = await db
     .update(campaigns)
-    .set({
-      name,
-      description,
-      updatedAt: new Date(),
-    })
+    .set(updateData)
     .where(eq(campaigns.id, params.campaignId))
     .returning()
 

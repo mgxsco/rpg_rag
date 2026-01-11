@@ -83,11 +83,17 @@ export const verificationTokens = pgTable(
   })
 )
 
+// Supported languages
+export const languageEnum = [
+  'en', 'pt-BR', 'pt', 'es', 'fr', 'de', 'it', 'nl', 'pl', 'ru', 'ja', 'ko', 'zh'
+] as const
+
 // Campaign tables
 export const campaigns = pgTable('campaigns', {
   id: uuid('id').defaultRandom().primaryKey(),
   name: text('name').notNull(),
   description: text('description'),
+  language: text('language').default('en').notNull(),
   ownerId: uuid('owner_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),

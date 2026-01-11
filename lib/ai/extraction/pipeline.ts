@@ -143,13 +143,21 @@ async function extractFromChunk(
 
   const response = await anthropic.messages.create({
     model: 'claude-3-5-haiku-20241022',
-    max_tokens: 4096,
-    system: `You are analyzing D&D/RPG campaign content. Extract ALL named entities and their relationships.
+    max_tokens: 8192,
+    system: `You are analyzing D&D/RPG campaign content for a wiki knowledge base. Extract ALL named entities with DETAILED descriptions and their relationships.
 ${languageInstruction}
 
 Entity types: npc, location, item, quest, faction, lore, session, player_character, freeform
 
-Relationship types: lives_in, member_of, owns, created, enemy_of, ally_of, located_in, participated_in, mentioned_in, related_to
+Relationship types: lives_in, member_of, owns, created, enemy_of, ally_of, located_in, participated_in, mentioned_in, related_to, knows, serves, rules, guards, seeks, fears, loves, hates
+
+IMPORTANT: Write detailed, rich descriptions (4-8 sentences) that capture:
+- Physical appearance (for NPCs/items)
+- Personality traits (for NPCs)
+- History and background
+- Notable features or characteristics
+- Role in the story
+- Any mysteries or secrets hinted at
 
 Return ONLY valid JSON:
 {
@@ -157,7 +165,7 @@ Return ONLY valid JSON:
     "name": "Entity Name",
     "type": "npc|location|item|quest|faction|lore|session|player_character|freeform",
     "aliases": ["other names"],
-    "description": "Brief description from the text (2-3 sentences)",
+    "description": "Detailed description (4-8 sentences) capturing appearance, personality, history, and role",
     "confidence": 0.0-1.0
   }],
   "relationships": [{
@@ -165,11 +173,11 @@ Return ONLY valid JSON:
     "targetEntity": "Other Entity",
     "relationshipType": "lives_in|member_of|owns|etc",
     "reverseLabel": "reverse label",
-    "excerpt": "brief context"
+    "excerpt": "brief context from the text"
   }]
 }
 
-Be thorough - extract EVERY named character, place, item, organization, etc.`,
+Be thorough - extract EVERY named character, place, item, organization. Write descriptions like you're creating a wiki page.`,
     messages: [{
       role: 'user',
       content: content,
@@ -216,47 +224,36 @@ function mergeExtractions(
   extractions: ChunkExtraction[],
   existingEntityNames: string[]
 ): { entities: ExtractedEntity[], relationships: RelationshipMention[] } {
-  const entityMap = new Map<string, ExtractedEntity>()
+  const entityMentionMap = new Map<string, EntityMention>()
   const allRelationships: RelationshipMention[] = []
   const existingNamesLower = new Set(existingEntityNames.map(n => n.toLowerCase()))
 
-  // Merge entities
+  // First pass: collect all entity mentions
   for (const extraction of extractions) {
     for (const mention of extraction.entities) {
       const key = mention.name.toLowerCase()
-      const canonicalName = mention.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 
       // Skip if already exists in campaign
+      const canonicalName = mention.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
       if (existingNamesLower.has(key) || existingNamesLower.has(canonicalName)) {
         continue
       }
 
-      if (entityMap.has(key)) {
-        // Merge with existing
-        const existing = entityMap.get(key)!
+      if (entityMentionMap.has(key)) {
+        // Merge with existing mention
+        const existing = entityMentionMap.get(key)!
         // Add new aliases
         for (const alias of mention.aliases || []) {
           if (!existing.aliases.includes(alias)) {
             existing.aliases.push(alias)
           }
         }
-        // Append description if different
-        if (mention.description && !existing.content.includes(mention.description)) {
-          existing.content += '\n\n' + mention.description
+        // Combine descriptions
+        if (mention.description && !existing.description.includes(mention.description)) {
+          existing.description += ' ' + mention.description
         }
       } else {
-        // Create new entity with basic wiki content
-        const wikiContent = generateBasicWikiContent(mention)
-
-        entityMap.set(key, {
-          name: mention.name,
-          canonicalName,
-          type: mention.type,
-          content: wikiContent,
-          aliases: mention.aliases || [],
-          tags: [mention.type],
-          relationships: [],
-        })
+        entityMentionMap.set(key, { ...mention, aliases: mention.aliases || [] })
       }
     }
 
@@ -273,17 +270,88 @@ function mergeExtractions(
     return true
   })
 
+  // Build all entity names set for wikilinks
+  const allEntityNames = new Set<string>()
+  for (const mention of entityMentionMap.values()) {
+    allEntityNames.add(mention.name)
+  }
+  // Also include existing entities for wikilink detection
+  for (const name of existingEntityNames) {
+    allEntityNames.add(name)
+  }
+
+  // Second pass: generate wiki content with relationships and wikilinks
+  const entities: ExtractedEntity[] = []
+  for (const [key, mention] of entityMentionMap) {
+    const canonicalName = mention.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+
+    // Get relationships for this entity
+    const outgoingRelationships: EntityRelationship[] = uniqueRelationships
+      .filter(r => r.sourceEntity.toLowerCase() === key)
+      .map(r => ({
+        targetName: r.targetEntity,
+        type: r.relationshipType,
+        reverseLabel: r.reverseLabel,
+        excerpt: r.excerpt,
+      }))
+
+    const incomingRelationships: EntityRelationship[] = uniqueRelationships
+      .filter(r => r.targetEntity.toLowerCase() === key)
+      .map(r => ({
+        targetName: r.sourceEntity,
+        type: r.relationshipType,
+        reverseLabel: r.reverseLabel,
+        excerpt: r.excerpt,
+      }))
+
+    // Generate wiki content with wikilinks
+    const wikiContent = generateWikiContent(
+      mention,
+      outgoingRelationships,
+      incomingRelationships,
+      allEntityNames
+    )
+
+    entities.push({
+      name: mention.name,
+      canonicalName,
+      type: mention.type,
+      content: wikiContent,
+      aliases: mention.aliases,
+      tags: [mention.type],
+      relationships: outgoingRelationships.map(r => ({
+        sourceEntity: mention.name,
+        targetEntity: r.targetName,
+        relationshipType: r.type,
+        reverseLabel: r.reverseLabel,
+        excerpt: r.excerpt || '',
+      })),
+    })
+  }
+
   return {
-    entities: Array.from(entityMap.values()),
+    entities,
     relationships: uniqueRelationships,
   }
 }
 
 // ============================================
-// Generate basic wiki content from extraction
+// Generate detailed wiki content with [[wikilinks]]
 // ============================================
 
-function generateBasicWikiContent(mention: EntityMention): string {
+interface EntityRelationship {
+  targetName: string
+  type: string
+  reverseLabel?: string
+  excerpt?: string
+}
+
+function generateWikiContent(
+  mention: EntityMention,
+  outgoingRelationships: EntityRelationship[],
+  incomingRelationships: EntityRelationship[],
+  allEntityNames: Set<string>
+): string {
   const typeLabels: Record<string, string> = {
     npc: 'Character',
     location: 'Location',
@@ -296,18 +364,79 @@ function generateBasicWikiContent(mention: EntityMention): string {
     freeform: 'Entry',
   }
 
-  const label = typeLabels[mention.type] || 'Entry'
-
-  let content = `# ${mention.name}\n\n`
-  content += `**Type:** ${label}\n\n`
-
-  if (mention.aliases && mention.aliases.length > 0) {
-    content += `**Also known as:** ${mention.aliases.join(', ')}\n\n`
+  const relationshipLabels: Record<string, string> = {
+    lives_in: 'Lives in',
+    member_of: 'Member of',
+    owns: 'Owns',
+    created: 'Created',
+    enemy_of: 'Enemy of',
+    ally_of: 'Ally of',
+    located_in: 'Located in',
+    participated_in: 'Participated in',
+    mentioned_in: 'Mentioned in',
+    related_to: 'Related to',
+    knows: 'Knows',
+    serves: 'Serves',
+    rules: 'Rules over',
+    guards: 'Guards',
+    seeks: 'Seeks',
+    fears: 'Fears',
+    loves: 'Loves',
+    hates: 'Hates',
   }
 
-  content += `## Description\n\n`
-  content += mention.description || `A ${label.toLowerCase()} mentioned in the campaign.`
-  content += '\n'
+  const label = typeLabels[mention.type] || 'Entry'
+
+  // Convert description to include [[wikilinks]] for known entities
+  let description = mention.description || `A ${label.toLowerCase()} mentioned in the campaign.`
+
+  // Replace entity names with wikilinks (case-insensitive, whole word)
+  for (const entityName of allEntityNames) {
+    if (entityName.toLowerCase() !== mention.name.toLowerCase()) {
+      // Match whole words, case-insensitive
+      const escapedName = entityName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const regex = new RegExp(`\\b${escapedName}\\b(?![\\]\\]])`, 'gi')
+      description = description.replace(regex, `[[${entityName}]]`)
+    }
+  }
+
+  let content = `# ${mention.name}\n\n`
+
+  if (mention.aliases && mention.aliases.length > 0) {
+    content += `*Also known as: ${mention.aliases.join(', ')}*\n\n`
+  }
+
+  content += description + '\n\n'
+
+  // Add outgoing relationships as wiki links in prose
+  if (outgoingRelationships.length > 0) {
+    content += `## Connections\n\n`
+
+    // Group relationships by type
+    const groupedRels: Record<string, string[]> = {}
+    for (const rel of outgoingRelationships) {
+      const relLabel = relationshipLabels[rel.type] || rel.type.replace(/_/g, ' ')
+      if (!groupedRels[relLabel]) {
+        groupedRels[relLabel] = []
+      }
+      groupedRels[relLabel].push(`[[${rel.targetName}]]`)
+    }
+
+    for (const [relType, targets] of Object.entries(groupedRels)) {
+      content += `- **${relType}:** ${targets.join(', ')}\n`
+    }
+    content += '\n'
+  }
+
+  // Add incoming relationships (backlinks)
+  if (incomingRelationships.length > 0) {
+    const uniqueBacklinks = [...new Set(incomingRelationships.map(r => r.targetName))]
+    if (uniqueBacklinks.length > 0) {
+      content += `## Mentioned By\n\n`
+      content += uniqueBacklinks.map(name => `- [[${name}]]`).join('\n')
+      content += '\n'
+    }
+  }
 
   return content
 }

@@ -16,14 +16,38 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
 import { useToast } from '@/components/ui/use-toast'
-import { Save, Trash2, RefreshCw, Loader2 } from 'lucide-react'
+import { Save, Trash2, RefreshCw, Loader2, Globe } from 'lucide-react'
+
+const LANGUAGES = [
+  { value: 'en', label: 'English' },
+  { value: 'pt-BR', label: 'Portuguese (Brazil)' },
+  { value: 'pt', label: 'Portuguese' },
+  { value: 'es', label: 'Spanish' },
+  { value: 'fr', label: 'French' },
+  { value: 'de', label: 'German' },
+  { value: 'it', label: 'Italian' },
+  { value: 'nl', label: 'Dutch' },
+  { value: 'pl', label: 'Polish' },
+  { value: 'ru', label: 'Russian' },
+  { value: 'ja', label: 'Japanese' },
+  { value: 'ko', label: 'Korean' },
+  { value: 'zh', label: 'Chinese' },
+]
 
 interface Campaign {
   id: string
   name: string
   description: string | null
+  language: string
 }
 
 export default function SettingsPage({
@@ -34,6 +58,7 @@ export default function SettingsPage({
   const [campaign, setCampaign] = useState<Campaign | null>(null)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [language, setLanguage] = useState('en')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [reindexing, setReindexing] = useState(false)
@@ -50,6 +75,7 @@ export default function SettingsPage({
         setCampaign(data)
         setName(data.name)
         setDescription(data.description || '')
+        setLanguage(data.language || 'en')
       }
       setLoading(false)
     }
@@ -63,7 +89,7 @@ export default function SettingsPage({
     const res = await fetch(`/api/campaigns/${params.campaignId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, description }),
+      body: JSON.stringify({ name, description, language }),
     })
 
     if (!res.ok) {
@@ -178,6 +204,27 @@ export default function SettingsPage({
                   onChange={(e) => setDescription(e.target.value)}
                   rows={3}
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="language" className="flex items-center gap-2">
+                  <Globe className="h-4 w-4" />
+                  Campaign Language
+                </Label>
+                <Select value={language} onValueChange={setLanguage}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LANGUAGES.map((lang) => (
+                      <SelectItem key={lang.value} value={lang.value}>
+                        {lang.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground">
+                  This language will be used for AI entity extraction and descriptions.
+                </p>
               </div>
               <Button onClick={handleSave} disabled={saving}>
                 <Save className="h-4 w-4 mr-2" />

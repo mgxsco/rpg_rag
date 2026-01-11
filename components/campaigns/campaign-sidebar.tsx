@@ -6,7 +6,6 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
   Home,
-  FileText,
   Network,
   MessageSquare,
   Settings,
@@ -33,11 +32,6 @@ export function CampaignSidebar({ campaignId, isDM }: CampaignSidebarProps) {
       href: `/campaigns/${campaignId}/entities`,
       label: 'Wiki',
       icon: BookOpen,
-    },
-    {
-      href: `/campaigns/${campaignId}/notes`,
-      label: 'Notes (Legacy)',
-      icon: FileText,
     },
     {
       href: `/campaigns/${campaignId}/graph`,

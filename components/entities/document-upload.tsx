@@ -4,32 +4,8 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Upload, FileText, Loader2, CheckCircle, XCircle, ArrowLeft, Globe } from 'lucide-react'
+import { Upload, FileText, Loader2, CheckCircle, XCircle, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
-
-const LANGUAGES = [
-  { value: 'en', label: 'English' },
-  { value: 'pt-BR', label: 'Portuguese (Brazil)' },
-  { value: 'pt', label: 'Portuguese' },
-  { value: 'es', label: 'Spanish' },
-  { value: 'fr', label: 'French' },
-  { value: 'de', label: 'German' },
-  { value: 'it', label: 'Italian' },
-  { value: 'nl', label: 'Dutch' },
-  { value: 'pl', label: 'Polish' },
-  { value: 'ru', label: 'Russian' },
-  { value: 'ja', label: 'Japanese' },
-  { value: 'ko', label: 'Korean' },
-  { value: 'zh', label: 'Chinese' },
-]
 
 interface DocumentUploadProps {
   campaignId: string
@@ -64,7 +40,6 @@ export function DocumentUpload({ campaignId }: DocumentUploadProps) {
   const [dragActive, setDragActive] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
   const [progressSteps, setProgressSteps] = useState<string[]>([])
-  const [language, setLanguage] = useState('en')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
@@ -80,7 +55,6 @@ export function DocumentUpload({ campaignId }: DocumentUploadProps) {
     for (let i = 0; i < files.length; i++) {
       formData.append('files', files[i])
     }
-    formData.append('language', language)
 
     try {
       setProgressSteps(prev => [...prev, `Uploading ${files.length} file(s)...`])
@@ -168,26 +142,6 @@ export function DocumentUpload({ campaignId }: DocumentUploadProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Language selector */}
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Globe className="h-4 w-4 text-muted-foreground" />
-              <Label htmlFor="language" className="text-sm">Document Language:</Label>
-            </div>
-            <Select value={language} onValueChange={setLanguage} disabled={uploading}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {LANGUAGES.map((lang) => (
-                  <SelectItem key={lang.value} value={lang.value}>
-                    {lang.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           <div
             className={`
               border-2 border-dashed rounded-lg p-12 text-center transition-colors

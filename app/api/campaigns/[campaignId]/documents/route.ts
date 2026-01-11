@@ -24,6 +24,9 @@ async function ensureTablesExist(): Promise<{ migrated: boolean; error?: string 
       ) as exists
     `
 
+    // Also ensure campaigns has language column
+    await sql`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS language TEXT DEFAULT 'en' NOT NULL`
+
     if (result.rows[0]?.exists) {
       return { migrated: false }
     }
@@ -181,7 +184,9 @@ export async function POST(
 
     const formData = await request.formData()
     const files = formData.getAll('files') as File[]
-    const language = (formData.get('language') as string) || 'en'
+
+    // Get language from campaign settings
+    const language = (campaign as any).language || 'en'
 
     if (!files || files.length === 0) {
       return NextResponse.json({ error: 'No files provided' }, { status: 400 })
@@ -193,6 +198,8 @@ export async function POST(
     if (migration.migrated) {
       progress.push('Database tables created automatically')
     }
+
+    progress.push(`Campaign language: ${language}`)
 
     for (const file of files) {
       const fileName = file.name
