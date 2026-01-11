@@ -48,6 +48,26 @@ function getAnthropicClient(): Anthropic {
   return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 }
 
+// Language code to name mapping
+function getLanguageName(code: string): string {
+  const languages: Record<string, string> = {
+    en: 'English',
+    es: 'Spanish',
+    pt: 'Portuguese',
+    'pt-BR': 'Brazilian Portuguese',
+    fr: 'French',
+    de: 'German',
+    it: 'Italian',
+    nl: 'Dutch',
+    pl: 'Polish',
+    ru: 'Russian',
+    ja: 'Japanese',
+    ko: 'Korean',
+    zh: 'Chinese',
+  }
+  return languages[code] || code
+}
+
 // ============================================
 // Chunk document into smaller pieces
 // ============================================
@@ -110,16 +130,22 @@ interface ChunkExtraction {
 async function extractFromChunk(
   content: string,
   chunkIndex: number,
-  totalChunks: number
+  totalChunks: number,
+  language: string = 'en'
 ): Promise<ChunkExtraction> {
-  console.log(`[Extraction] Processing chunk ${chunkIndex + 1}/${totalChunks} (${content.length} chars)`)
+  console.log(`[Extraction] Processing chunk ${chunkIndex + 1}/${totalChunks} (${content.length} chars, lang: ${language})`)
 
   const anthropic = getAnthropicClient()
+
+  const languageInstruction = language !== 'en'
+    ? `IMPORTANT: The content is in ${getLanguageName(language)}. Extract entity names as they appear in the original language, but you may provide descriptions in ${getLanguageName(language)} as well.`
+    : ''
 
   const response = await anthropic.messages.create({
     model: 'claude-3-5-haiku-20241022',
     max_tokens: 4096,
-    system: `You are analyzing D&D campaign content. Extract ALL named entities and their relationships.
+    system: `You are analyzing D&D/RPG campaign content. Extract ALL named entities and their relationships.
+${languageInstruction}
 
 Entity types: npc, location, item, quest, faction, lore, session, player_character, freeform
 
@@ -290,25 +316,48 @@ function generateBasicWikiContent(mention: EntityMention): string {
 // Full Extraction Pipeline (Fast version)
 // ============================================
 
+export interface ExtractionProgress {
+  stage: string
+  current: number
+  total: number
+  message: string
+}
+
 export async function runExtractionPipeline(
   content: string,
   fileName: string,
-  existingEntityNames: string[] = []
+  existingEntityNames: string[] = [],
+  language: string = 'en',
+  onProgress?: (progress: ExtractionProgress) => void
 ): Promise<ExtractionResult> {
   console.log(`[Extraction] Starting fast pipeline for ${fileName}`)
-  console.log(`[Extraction] Content length: ${content.length} chars`)
+  console.log(`[Extraction] Content length: ${content.length} chars, language: ${language}`)
   console.log(`[Extraction] Existing entities: ${existingEntityNames.length}`)
 
   // Chunk the document
   const chunks = chunkDocument(content, 8000)
   console.log(`[Extraction] Split into ${chunks.length} chunks`)
 
+  onProgress?.({
+    stage: 'chunking',
+    current: 0,
+    total: chunks.length,
+    message: `Split document into ${chunks.length} chunks`
+  })
+
   // Process chunks (sequentially to avoid rate limits, but faster than before)
   const extractions: ChunkExtraction[] = []
 
   for (let i = 0; i < chunks.length; i++) {
+    onProgress?.({
+      stage: 'extracting',
+      current: i + 1,
+      total: chunks.length,
+      message: `Extracting entities from chunk ${i + 1}/${chunks.length}`
+    })
+
     try {
-      const extraction = await extractFromChunk(chunks[i], i, chunks.length)
+      const extraction = await extractFromChunk(chunks[i], i, chunks.length, language)
       extractions.push(extraction)
     } catch (error) {
       console.error(`[Extraction] Failed to process chunk ${i + 1}:`, error)

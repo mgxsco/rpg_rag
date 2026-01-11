@@ -4,8 +4,32 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Upload, FileText, Loader2, CheckCircle, XCircle, ArrowLeft } from 'lucide-react'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Upload, FileText, Loader2, CheckCircle, XCircle, ArrowLeft, Globe } from 'lucide-react'
 import Link from 'next/link'
+
+const LANGUAGES = [
+  { value: 'en', label: 'English' },
+  { value: 'pt-BR', label: 'Portuguese (Brazil)' },
+  { value: 'pt', label: 'Portuguese' },
+  { value: 'es', label: 'Spanish' },
+  { value: 'fr', label: 'French' },
+  { value: 'de', label: 'German' },
+  { value: 'it', label: 'Italian' },
+  { value: 'nl', label: 'Dutch' },
+  { value: 'pl', label: 'Polish' },
+  { value: 'ru', label: 'Russian' },
+  { value: 'ja', label: 'Japanese' },
+  { value: 'ko', label: 'Korean' },
+  { value: 'zh', label: 'Chinese' },
+]
 
 interface DocumentUploadProps {
   campaignId: string
@@ -39,6 +63,8 @@ export function DocumentUpload({ campaignId }: DocumentUploadProps) {
   const [results, setResults] = useState<UploadResult[]>([])
   const [dragActive, setDragActive] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
+  const [progressSteps, setProgressSteps] = useState<string[]>([])
+  const [language, setLanguage] = useState('en')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
@@ -47,15 +73,19 @@ export function DocumentUpload({ campaignId }: DocumentUploadProps) {
 
     setUploading(true)
     setResults([])
+    setProgressSteps([])
     setStatusMessage('Uploading files...')
 
     const formData = new FormData()
     for (let i = 0; i < files.length; i++) {
       formData.append('files', files[i])
     }
+    formData.append('language', language)
 
     try {
-      setStatusMessage('Parsing and extracting entities...')
+      setProgressSteps(prev => [...prev, `Uploading ${files.length} file(s)...`])
+      setStatusMessage('Parsing document...')
+      setProgressSteps(prev => [...prev, 'Parsing document content...'])
 
       const res = await fetch(`/api/campaigns/${campaignId}/documents`, {
         method: 'POST',
@@ -68,14 +98,21 @@ export function DocumentUpload({ campaignId }: DocumentUploadProps) {
         throw new Error(data.error || 'Upload failed')
       }
 
+      // Add progress from server if available
+      if (data.progress) {
+        setProgressSteps(prev => [...prev, ...data.progress])
+      }
+
       setResults(data.results)
       setStatusMessage('Complete!')
+      setProgressSteps(prev => [...prev, `Created ${data.results.reduce((sum: number, r: UploadResult) => sum + (r.entitiesCreated || 0), 0)} entities`])
 
       // Refresh the page after a short delay
       setTimeout(() => {
         router.refresh()
       }, 1500)
     } catch (error) {
+      setProgressSteps(prev => [...prev, `Error: ${error instanceof Error ? error.message : 'Unknown error'}`])
       setResults([
         {
           file: 'Upload',
@@ -131,6 +168,26 @@ export function DocumentUpload({ campaignId }: DocumentUploadProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* Language selector */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Globe className="h-4 w-4 text-muted-foreground" />
+              <Label htmlFor="language" className="text-sm">Document Language:</Label>
+            </div>
+            <Select value={language} onValueChange={setLanguage} disabled={uploading}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {LANGUAGES.map((lang) => (
+                  <SelectItem key={lang.value} value={lang.value}>
+                    {lang.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div
             className={`
               border-2 border-dashed rounded-lg p-12 text-center transition-colors
@@ -169,6 +226,21 @@ export function DocumentUpload({ campaignId }: DocumentUploadProps) {
               </div>
             )}
           </div>
+
+          {/* Progress steps */}
+          {progressSteps.length > 0 && (
+            <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+              <p className="font-medium text-sm">Processing Log:</p>
+              <div className="space-y-1 max-h-48 overflow-y-auto text-sm font-mono">
+                {progressSteps.map((step, index) => (
+                  <div key={index} className="flex items-center gap-2 text-muted-foreground">
+                    <span className="text-xs text-muted-foreground/50">[{index + 1}]</span>
+                    <span>{step}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {results.length > 0 && (
             <div className="space-y-4">
