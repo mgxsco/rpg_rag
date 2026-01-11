@@ -281,7 +281,277 @@ export const noteEmbeddingsRelations = relations(noteEmbeddings, ({ one }) => ({
   }),
 }))
 
+// ============================================
+// NEW: Obsidian-style Knowledge Graph Tables
+// ============================================
+
+// Source documents (uploaded files)
+export const documents = pgTable(
+  'documents',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    content: text('content').notNull(),
+    fileType: text('file_type'),
+    uploadedBy: uuid('uploaded_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    campaignIdx: index('documents_campaign_idx').on(table.campaignId),
+  })
+)
+
+// Entity types enum
+export const entityTypeEnum = [
+  'session',
+  'npc',
+  'location',
+  'item',
+  'lore',
+  'quest',
+  'faction',
+  'player_character',
+  'freeform',
+] as const
+
+// Entities (wiki pages)
+export const entities = pgTable(
+  'entities',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+
+    // Content
+    name: text('name').notNull(),
+    canonicalName: text('canonical_name').notNull(), // For deduplication
+    entityType: text('entity_type', { enum: entityTypeEnum }).notNull(),
+    content: text('content').default(''),
+
+    // Metadata
+    aliases: text('aliases').array().default(sql`'{}'::text[]`),
+    tags: text('tags').array().default(sql`'{}'::text[]`),
+    isDmOnly: boolean('is_dm_only').default(false),
+
+    // Original note reference (for migration)
+    sourceNoteId: uuid('source_note_id').references(() => notes.id),
+
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    uniqueCanonical: unique().on(table.campaignId, table.canonicalName),
+    campaignIdx: index('entities_campaign_idx').on(table.campaignId),
+    typeIdx: index('entities_type_idx').on(table.campaignId, table.entityType),
+  })
+)
+
+// Source references (where entity was mentioned)
+export const entitySources = pgTable(
+  'entity_sources',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    entityId: uuid('entity_id')
+      .notNull()
+      .references(() => entities.id, { onDelete: 'cascade' }),
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    excerpt: text('excerpt'),
+    confidence: text('confidence').default('1.0'), // Using text to avoid float issues
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    uniqueSource: unique().on(table.entityId, table.documentId),
+    entityIdx: index('entity_sources_entity_idx').on(table.entityId),
+  })
+)
+
+// Relationship types
+export const relationshipTypeEnum = [
+  'lives_in',
+  'member_of',
+  'owns',
+  'created',
+  'enemy_of',
+  'ally_of',
+  'located_in',
+  'participated_in',
+  'mentioned_in',
+  'related_to',
+] as const
+
+// Relationships (graph edges)
+export const relationships = pgTable(
+  'relationships',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+
+    sourceEntityId: uuid('source_entity_id')
+      .notNull()
+      .references(() => entities.id, { onDelete: 'cascade' }),
+    targetEntityId: uuid('target_entity_id')
+      .notNull()
+      .references(() => entities.id, { onDelete: 'cascade' }),
+
+    relationshipType: text('relationship_type').notNull(),
+    reverseLabel: text('reverse_label'), // e.g., "residents" for "lives_in"
+
+    // Source tracking
+    documentId: uuid('document_id').references(() => documents.id),
+
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    uniqueRelation: unique().on(table.sourceEntityId, table.targetEntityId, table.relationshipType),
+    sourceIdx: index('relationships_source_idx').on(table.sourceEntityId),
+    targetIdx: index('relationships_target_idx').on(table.targetEntityId),
+    campaignIdx: index('relationships_campaign_idx').on(table.campaignId),
+  })
+)
+
+// Chunks for RAG (semantic search on entities)
+export const chunks = pgTable(
+  'chunks',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    entityId: uuid('entity_id')
+      .notNull()
+      .references(() => entities.id, { onDelete: 'cascade' }),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+
+    content: text('content').notNull(),
+    chunkIndex: integer('chunk_index').notNull(),
+
+    // Context metadata
+    headerPath: text('header_path').array().default(sql`'{}'::text[]`),
+    entityMentions: text('entity_mentions').array().default(sql`'{}'::text[]`),
+
+    embedding: vector('embedding', { dimensions: 1024 }),
+
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    entityIdx: index('chunks_entity_idx').on(table.entityId),
+    campaignIdx: index('chunks_campaign_idx').on(table.campaignId),
+  })
+)
+
+// Entity versions (history)
+export const entityVersions = pgTable('entity_versions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  entityId: uuid('entity_id')
+    .notNull()
+    .references(() => entities.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  content: text('content').notNull(),
+  editedBy: uuid('edited_by')
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+// ============================================
+// NEW: Relations for Knowledge Graph
+// ============================================
+
+export const documentsRelations = relations(documents, ({ one, many }) => ({
+  campaign: one(campaigns, {
+    fields: [documents.campaignId],
+    references: [campaigns.id],
+  }),
+  uploader: one(users, {
+    fields: [documents.uploadedBy],
+    references: [users.id],
+  }),
+  entitySources: many(entitySources),
+}))
+
+export const entitiesRelations = relations(entities, ({ one, many }) => ({
+  campaign: one(campaigns, {
+    fields: [entities.campaignId],
+    references: [campaigns.id],
+  }),
+  sourceNote: one(notes, {
+    fields: [entities.sourceNoteId],
+    references: [notes.id],
+  }),
+  sources: many(entitySources),
+  chunks: many(chunks),
+  versions: many(entityVersions),
+  outgoingRelationships: many(relationships, { relationName: 'sourceEntity' }),
+  incomingRelationships: many(relationships, { relationName: 'targetEntity' }),
+}))
+
+export const entitySourcesRelations = relations(entitySources, ({ one }) => ({
+  entity: one(entities, {
+    fields: [entitySources.entityId],
+    references: [entities.id],
+  }),
+  document: one(documents, {
+    fields: [entitySources.documentId],
+    references: [documents.id],
+  }),
+}))
+
+export const relationshipsRelations = relations(relationships, ({ one }) => ({
+  campaign: one(campaigns, {
+    fields: [relationships.campaignId],
+    references: [campaigns.id],
+  }),
+  sourceEntity: one(entities, {
+    fields: [relationships.sourceEntityId],
+    references: [entities.id],
+    relationName: 'sourceEntity',
+  }),
+  targetEntity: one(entities, {
+    fields: [relationships.targetEntityId],
+    references: [entities.id],
+    relationName: 'targetEntity',
+  }),
+  document: one(documents, {
+    fields: [relationships.documentId],
+    references: [documents.id],
+  }),
+}))
+
+export const chunksRelations = relations(chunks, ({ one }) => ({
+  entity: one(entities, {
+    fields: [chunks.entityId],
+    references: [entities.id],
+  }),
+  campaign: one(campaigns, {
+    fields: [chunks.campaignId],
+    references: [campaigns.id],
+  }),
+}))
+
+export const entityVersionsRelations = relations(entityVersions, ({ one }) => ({
+  entity: one(entities, {
+    fields: [entityVersions.entityId],
+    references: [entities.id],
+  }),
+  editor: one(users, {
+    fields: [entityVersions.editedBy],
+    references: [users.id],
+  }),
+}))
+
+// ============================================
 // Types
+// ============================================
+
 export type User = typeof users.$inferSelect
 export type Campaign = typeof campaigns.$inferSelect
 export type CampaignMember = typeof campaignMembers.$inferSelect
@@ -291,3 +561,13 @@ export type NoteVersion = typeof noteVersions.$inferSelect
 export type NoteEmbedding = typeof noteEmbeddings.$inferSelect
 export type NoteType = Note['noteType']
 export type MemberRole = CampaignMember['role']
+
+// New types for knowledge graph
+export type Document = typeof documents.$inferSelect
+export type Entity = typeof entities.$inferSelect
+export type EntitySource = typeof entitySources.$inferSelect
+export type Relationship = typeof relationships.$inferSelect
+export type Chunk = typeof chunks.$inferSelect
+export type EntityVersion = typeof entityVersions.$inferSelect
+export type EntityType = Entity['entityType']
+export type RelationshipType = (typeof relationshipTypeEnum)[number]
