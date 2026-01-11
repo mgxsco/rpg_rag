@@ -54,6 +54,8 @@ export async function POST(
 
   for (const note of allNotes) {
     try {
+      console.log(`[Reindex] Processing note: ${note.title}`)
+
       // Sync embeddings
       await syncNoteEmbeddings(
         note.id,

@@ -2,11 +2,15 @@ import { db, noteEmbeddings } from '@/lib/db'
 import { eq } from 'drizzle-orm'
 import { chunkContent } from './chunker'
 
+// Helper for delay
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
 /**
  * Generate embedding using Voyage AI (Anthropic's recommended embedding partner)
  * Uses voyage-2 model which produces 1024-dimensional embeddings
+ * Includes retry logic with exponential backoff for rate limit errors
  */
-export async function generateEmbedding(text: string): Promise<number[]> {
+export async function generateEmbedding(text: string, retries = 3): Promise<number[]> {
   const apiKey = process.env.VOYAGE_API_KEY
 
   if (!apiKey) {
@@ -15,27 +19,42 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 
   console.log('[Embeddings] Generating embedding for text of length:', text.length)
 
-  const response = await fetch('https://api.voyageai.com/v1/embeddings', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      input: text,
-      model: 'voyage-2',
-    }),
-  })
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const response = await fetch('https://api.voyageai.com/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        input: text,
+        model: 'voyage-2',
+      }),
+    })
 
-  if (!response.ok) {
-    const error = await response.text()
-    console.error('[Embeddings] Voyage AI error:', error)
-    throw new Error(`Voyage AI error: ${error}`)
+    if (response.ok) {
+      const data = await response.json()
+      console.log('[Embeddings] Generated embedding with', data.data[0].embedding.length, 'dimensions')
+      return data.data[0].embedding
+    }
+
+    const errorText = await response.text()
+
+    // Check if it's a rate limit error (429 or contains rate limit message)
+    if (response.status === 429 || errorText.includes('rate limit') || errorText.includes('RPM')) {
+      if (attempt < retries) {
+        const waitTime = Math.pow(2, attempt + 1) * 1000 // 2s, 4s, 8s
+        console.log(`[Embeddings] Rate limited, waiting ${waitTime}ms before retry ${attempt + 1}/${retries}`)
+        await delay(waitTime)
+        continue
+      }
+    }
+
+    console.error('[Embeddings] Voyage AI error:', errorText)
+    throw new Error(`Voyage AI error: ${errorText}`)
   }
 
-  const data = await response.json()
-  console.log('[Embeddings] Generated embedding with', data.data[0].embedding.length, 'dimensions')
-  return data.data[0].embedding
+  throw new Error('Failed to generate embedding after retries')
 }
 
 /**
