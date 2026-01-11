@@ -8,8 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
 import { EntityCard } from '@/components/entities/entity-card'
-import { Search, Filter, Plus, Upload } from 'lucide-react'
-import { EntityType } from '@/lib/db/schema'
+import { Search, Filter, Plus, Upload, AlertTriangle } from 'lucide-react'
+import { EntityType, Entity } from '@/lib/db/schema'
 
 const ENTITY_TYPES: { value: EntityType; label: string }[] = [
   { value: 'session', label: 'Session' },
@@ -48,12 +48,20 @@ export default async function EntitiesPage({
 
   const isDM = membership?.role === 'dm' || campaign?.ownerId === session.user.id
 
-  // Get entities
-  let allEntities = await db
-    .select()
-    .from(entities)
-    .where(eq(entities.campaignId, params.campaignId))
-    .orderBy(desc(entities.updatedAt))
+  // Get entities - wrapped in try/catch in case table doesn't exist yet
+  let allEntities: Entity[] = []
+  let migrationNeeded = false
+
+  try {
+    allEntities = await db
+      .select()
+      .from(entities)
+      .where(eq(entities.campaignId, params.campaignId))
+      .orderBy(desc(entities.updatedAt))
+  } catch (error) {
+    console.error('[Entities] Error fetching entities:', error)
+    migrationNeeded = true
+  }
 
   // Filter by type
   if (searchParams.type) {
@@ -150,7 +158,18 @@ export default async function EntitiesPage({
           </div>
         </div>
 
-        {allEntities.length > 0 ? (
+        {migrationNeeded ? (
+          <div className="text-center py-12">
+            <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-yellow-500" />
+            <h3 className="text-lg font-medium mb-2">Database Migration Required</h3>
+            <p className="text-muted-foreground mb-4">
+              The knowledge graph tables need to be created. Please run the migration.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              POST /api/admin/migrate-v2
+            </p>
+          </div>
+        ) : allEntities.length > 0 ? (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {allEntities.map((entity) => (
               <EntityCard

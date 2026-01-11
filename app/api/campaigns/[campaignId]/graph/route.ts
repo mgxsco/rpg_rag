@@ -59,7 +59,13 @@ export async function GET(
 
   // Use new entity-based graph by default
   if (source === 'entities') {
-    return getEntityGraph(params.campaignId, access.isDM, searchParams)
+    try {
+      return await getEntityGraph(params.campaignId, access.isDM, searchParams)
+    } catch (error) {
+      console.error('[Graph] Entity graph failed, falling back to notes:', error)
+      // Fall back to notes if entity tables don't exist
+      return getNotesGraph(params.campaignId, access.isDM)
+    }
   }
 
   // Legacy: notes-based graph
