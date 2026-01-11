@@ -1,0 +1,124 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 262.1 83.3% 57.8%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 262.1 83.3% 57.8%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 263.4 70% 50.4%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 263.4 70% 50.4%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Custom styles for markdown content */
+.prose-content {
+  @apply prose prose-slate dark:prose-invert max-w-none;
+}
+
+.prose-content h1 {
+  @apply text-2xl font-bold mt-6 mb-4;
+}
+
+.prose-content h2 {
+  @apply text-xl font-semibold mt-5 mb-3;
+}
+
+.prose-content h3 {
+  @apply text-lg font-medium mt-4 mb-2;
+}
+
+.prose-content p {
+  @apply my-3 leading-7;
+}
+
+.prose-content ul, .prose-content ol {
+  @apply my-3 pl-6;
+}
+
+.prose-content li {
+  @apply my-1;
+}
+
+.prose-content blockquote {
+  @apply border-l-4 border-primary/50 pl-4 italic my-4;
+}
+
+.prose-content code {
+  @apply bg-muted px-1.5 py-0.5 rounded text-sm;
+}
+
+.prose-content pre {
+  @apply bg-muted p-4 rounded-lg overflow-x-auto my-4;
+}
+
+.prose-content pre code {
+  @apply bg-transparent p-0;
+}
+
+/* Wikilink styles */
+.wikilink {
+  @apply text-primary hover:underline cursor-pointer font-medium;
+}
+
+.wikilink-broken {
+  @apply text-destructive hover:underline cursor-pointer font-medium;
+}
+
+/* Note type badges */
+.note-type-session { @apply bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200; }
+.note-type-npc { @apply bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200; }
+.note-type-location { @apply bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200; }
+.note-type-item { @apply bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200; }
+.note-type-lore { @apply bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200; }
+.note-type-quest { @apply bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200; }
+.note-type-faction { @apply bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200; }
+.note-type-player_character { @apply bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200; }
+.note-type-freeform { @apply bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200; }
