@@ -144,40 +144,61 @@ async function extractFromChunk(
   const response = await anthropic.messages.create({
     model: 'claude-3-5-haiku-20241022',
     max_tokens: 8192,
-    system: `You are analyzing D&D/RPG campaign content for a wiki knowledge base. Extract ALL named entities with DETAILED descriptions and their relationships.
+    system: `You are a meticulous D&D/RPG wiki curator extracting EVERY entity from campaign content. Your job is to identify ALL named elements, even those mentioned briefly or in passing.
 ${languageInstruction}
 
-Entity types: npc, location, item, quest, faction, lore, session, player_character, freeform
+ENTITY TYPES (be generous in classification):
+- npc: ANY named character (villains, shopkeepers, guards, mentioned ancestors, gods, etc.)
+- location: ANY named place (cities, rooms, dungeons, forests, mountains, planes, buildings, etc.)
+- item: ANY named object (weapons, artifacts, potions, keys, books, clothing, vehicles, etc.)
+- quest: ANY mission, objective, task, or goal mentioned
+- faction: ANY group, organization, guild, army, cult, family, species, etc.
+- lore: Historical events, legends, prophecies, myths, calendar dates, customs
+- session: Session summaries or play recaps
+- player_character: Player characters
+- freeform: Anything else notable (spells, abilities, concepts, titles, etc.)
 
-Relationship types: lives_in, member_of, owns, created, enemy_of, ally_of, located_in, participated_in, mentioned_in, related_to, knows, serves, rules, guards, seeks, fears, loves, hates
+RELATIONSHIP TYPES:
+lives_in, member_of, owns, created, enemy_of, ally_of, located_in, participated_in, mentioned_in, related_to, knows, serves, rules, guards, seeks, fears, loves, hates, works_for, parent_of, child_of, sibling_of, married_to, worships, leads, follows, created_by, contains, part_of
 
-IMPORTANT: Write detailed, rich descriptions (4-8 sentences) that capture:
-- Physical appearance (for NPCs/items)
-- Personality traits (for NPCs)
-- History and background
-- Notable features or characteristics
-- Role in the story
-- Any mysteries or secrets hinted at
+EXTRACTION RULES - BE AGGRESSIVE:
+1. Extract EVERY proper noun and named thing, even if mentioned once
+2. Include characters mentioned in dialogue or backstory
+3. Include places referenced but not visited
+4. Include items described or hinted at
+5. Include organizations mentioned in passing
+6. Include historical figures and events
+7. Include deities, spirits, and supernatural entities
+8. Include species, races, and creature types as factions
+9. When in doubt, INCLUDE IT
+
+DESCRIPTION GUIDELINES (3-6 sentences):
+- What is known about this entity from the text
+- Physical details if described
+- Personality or characteristics if evident
+- Role or significance in the story
+- Connections to other entities
+- Any mysteries or unknowns
 
 Return ONLY valid JSON:
 {
   "entities": [{
-    "name": "Entity Name",
+    "name": "Entity Name (use exact name from text)",
     "type": "npc|location|item|quest|faction|lore|session|player_character|freeform",
-    "aliases": ["other names"],
-    "description": "Detailed description (4-8 sentences) capturing appearance, personality, history, and role",
-    "confidence": 0.0-1.0
+    "aliases": ["nicknames", "titles", "alternate spellings"],
+    "description": "Everything known about this entity from the text",
+    "confidence": 0.5-1.0
   }],
   "relationships": [{
     "sourceEntity": "Entity Name",
     "targetEntity": "Other Entity",
-    "relationshipType": "lives_in|member_of|owns|etc",
+    "relationshipType": "relationship_type",
     "reverseLabel": "reverse label",
-    "excerpt": "brief context from the text"
+    "excerpt": "quote or context from text"
   }]
 }
 
-Be thorough - extract EVERY named character, place, item, organization. Write descriptions like you're creating a wiki page.`,
+REMEMBER: It's better to extract too many entities than to miss important ones. A thorough wiki captures everything!`,
     messages: [{
       role: 'user',
       content: content,
@@ -383,6 +404,17 @@ function generateWikiContent(
     fears: 'Fears',
     loves: 'Loves',
     hates: 'Hates',
+    works_for: 'Works for',
+    parent_of: 'Parent of',
+    child_of: 'Child of',
+    sibling_of: 'Sibling of',
+    married_to: 'Married to',
+    worships: 'Worships',
+    leads: 'Leads',
+    follows: 'Follows',
+    created_by: 'Created by',
+    contains: 'Contains',
+    part_of: 'Part of',
   }
 
   const label = typeLabels[mention.type] || 'Entry'
