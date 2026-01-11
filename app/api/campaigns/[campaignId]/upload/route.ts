@@ -4,6 +4,7 @@ import { db, campaigns, campaignMembers, notes } from '@/lib/db'
 import { eq, and } from 'drizzle-orm'
 import { syncNoteEmbeddings } from '@/lib/ai/embeddings'
 import { syncNoteLinks } from '@/lib/wikilinks/sync'
+import Anthropic from '@anthropic-ai/sdk'
 
 // Dynamic import for pdf-parse to avoid build issues
 async function parsePDF(buffer: Buffer): Promise<string> {
@@ -19,6 +20,98 @@ function generateSlug(title: string): string {
     .replace(/^-|-$/g, '')
 }
 
+interface ExtractedNote {
+  title: string
+  content: string
+  noteType: 'session' | 'npc' | 'location' | 'item' | 'lore' | 'quest' | 'faction' | 'player_character' | 'freeform'
+  tags: string[]
+}
+
+async function analyzeAndExtractNotes(content: string, fileName: string): Promise<ExtractedNote[]> {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.log('[Upload] No ANTHROPIC_API_KEY, skipping AI analysis')
+    return [{
+      title: fileName.replace(/\.[^/.]+$/, ''),
+      content,
+      noteType: 'lore',
+      tags: ['imported'],
+    }]
+  }
+
+  console.log('[Upload] Analyzing content with Claude...')
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 4096,
+    system: `You are a D&D campaign content analyzer. Extract structured notes from uploaded content.
+
+Analyze the content and extract ALL relevant entities into separate notes. Each note should be self-contained.
+
+Categories:
+- npc: Named characters (NPCs, villains, allies) - include appearance, personality, motivations
+- location: Places (cities, dungeons, taverns) - include description, notable features, inhabitants
+- item: Magic items, artifacts, important objects - include properties, history
+- quest: Quests, missions, objectives - include goals, rewards, challenges
+- faction: Organizations, guilds, groups - include goals, members, influence
+- lore: History, legends, world-building - include relevant context
+- session: Session summaries or recaps
+- freeform: Anything else important
+
+Return ONLY a valid JSON array. Each object must have:
+- title: Clear, descriptive name
+- content: Detailed markdown description (include ALL relevant details)
+- noteType: One of the categories above
+- tags: Relevant tags as string array
+
+Extract EVERY entity mentioned. Create separate notes for each NPC, location, item, etc.
+Use [[Note Title]] wikilink syntax to reference other notes you're creating.`,
+    messages: [{
+      role: 'user',
+      content: `Analyze this D&D content and extract all notes:\n\n---\nFile: ${fileName}\n---\n\n${content.slice(0, 50000)}`,
+    }],
+  })
+
+  const textContent = response.content.find((block) => block.type === 'text')
+  if (!textContent || textContent.type !== 'text') {
+    console.log('[Upload] No text response from Claude')
+    return [{
+      title: fileName.replace(/\.[^/.]+$/, ''),
+      content,
+      noteType: 'lore',
+      tags: ['imported'],
+    }]
+  }
+
+  try {
+    let jsonStr = textContent.text
+    const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
+    if (jsonMatch) {
+      jsonStr = jsonMatch[1]
+    }
+
+    const extracted = JSON.parse(jsonStr.trim()) as ExtractedNote[]
+    console.log(`[Upload] Extracted ${extracted.length} notes from content`)
+
+    return extracted.filter(note =>
+      note.title &&
+      note.content &&
+      ['session', 'npc', 'location', 'item', 'lore', 'quest', 'faction', 'player_character', 'freeform'].includes(note.noteType)
+    ).map(note => ({
+      ...note,
+      tags: Array.isArray(note.tags) ? [...note.tags, 'imported'] : ['imported'],
+    }))
+  } catch (error) {
+    console.error('[Upload] Failed to parse AI response:', error)
+    return [{
+      title: fileName.replace(/\.[^/.]+$/, ''),
+      content,
+      noteType: 'lore',
+      tags: ['imported'],
+    }]
+  }
+}
+
 export async function POST(
   request: Request,
   { params }: { params: { campaignId: string } }
@@ -29,7 +122,6 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Check membership
   const membership = await db.query.campaignMembers.findFirst({
     where: and(
       eq(campaignMembers.campaignId, params.campaignId),
@@ -65,7 +157,6 @@ export async function POST(
       const buffer = Buffer.from(await file.arrayBuffer())
 
       let content = ''
-      let title = fileName.replace(/\.[^/.]+$/, '') // Remove extension
 
       // Parse based on file type
       if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
@@ -94,11 +185,8 @@ export async function POST(
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
         fileName.endsWith('.docx')
       ) {
-        // For DOCX, we'll just extract raw text (basic support)
-        // A more complete solution would use mammoth or similar
-        content = `[DOCX file: ${fileName}]\n\nNote: DOCX parsing is limited. Consider converting to PDF or TXT for better results.`
+        content = `[DOCX file: ${fileName}]\n\nNote: DOCX parsing is limited. Consider converting to PDF or TXT.`
       } else {
-        // Try to read as text
         try {
           content = buffer.toString('utf-8')
         } catch {
@@ -111,7 +199,6 @@ export async function POST(
         }
       }
 
-      // Clean up content
       content = content.trim()
 
       if (!content) {
@@ -123,71 +210,88 @@ export async function POST(
         continue
       }
 
-      // Generate unique slug
-      let baseSlug = generateSlug(title)
-      let slug = baseSlug
-      let counter = 1
+      // Analyze content and extract notes using AI
+      console.log(`[Upload] Processing file: ${fileName}`)
+      const extractedNotes = await analyzeAndExtractNotes(content, fileName)
+      console.log(`[Upload] Creating ${extractedNotes.length} notes from ${fileName}`)
 
-      while (true) {
-        const existing = await db.query.notes.findFirst({
-          where: and(
-            eq(notes.campaignId, params.campaignId),
-            eq(notes.slug, slug)
-          ),
+      const createdNotes = []
+
+      for (const extracted of extractedNotes) {
+        // Generate unique slug
+        let baseSlug = generateSlug(extracted.title)
+        let slug = baseSlug
+        let counter = 1
+
+        while (true) {
+          const existing = await db.query.notes.findFirst({
+            where: and(
+              eq(notes.campaignId, params.campaignId),
+              eq(notes.slug, slug)
+            ),
+          })
+          if (!existing) break
+          slug = `${baseSlug}-${counter}`
+          counter++
+        }
+
+        // Create note
+        const [newNote] = await db
+          .insert(notes)
+          .values({
+            campaignId: params.campaignId,
+            authorId: session.user.id,
+            title: extracted.title,
+            slug,
+            content: extracted.content,
+            noteType: extracted.noteType,
+            tags: extracted.tags,
+          })
+          .returning()
+
+        // Sync embeddings for RAG
+        try {
+          await syncNoteEmbeddings(
+            newNote.id,
+            params.campaignId,
+            newNote.title,
+            newNote.content || ''
+          )
+          console.log(`[Upload] Embeddings synced for: ${newNote.title}`)
+        } catch (error) {
+          console.error(`[Upload] Failed to sync embeddings for ${newNote.title}:`, error)
+        }
+
+        // Sync wikilinks
+        try {
+          await syncNoteLinks(newNote.id, params.campaignId, newNote.content || '')
+        } catch (error) {
+          console.error(`[Upload] Failed to sync links for ${newNote.title}:`, error)
+        }
+
+        createdNotes.push({
+          noteId: newNote.id,
+          slug: newNote.slug,
+          title: newNote.title,
+          noteType: newNote.noteType,
         })
-        if (!existing) break
-        slug = `${baseSlug}-${counter}`
-        counter++
-      }
-
-      // Create note from file
-      const [newNote] = await db
-        .insert(notes)
-        .values({
-          campaignId: params.campaignId,
-          authorId: session.user.id,
-          title,
-          slug,
-          content,
-          noteType: 'lore', // Default type for uploaded files
-          tags: ['imported', fileName.split('.').pop() || 'file'],
-        })
-        .returning()
-
-      // Sync embeddings for RAG (if OpenAI key is configured)
-      try {
-        await syncNoteEmbeddings(
-          newNote.id,
-          params.campaignId,
-          title,
-          content
-        )
-      } catch (error) {
-        console.error('Failed to sync embeddings:', error)
-        // Continue even if embedding fails
-      }
-
-      // Sync wikilinks
-      try {
-        await syncNoteLinks(newNote.id, params.campaignId, content)
-      } catch (error) {
-        console.error('Failed to sync links:', error)
       }
 
       results.push({
         file: fileName,
         success: true,
-        noteId: newNote.id,
-        slug: newNote.slug,
-        title: newNote.title,
+        notesCreated: createdNotes.length,
+        notes: createdNotes,
         contentLength: content.length,
       })
     }
 
+    const totalNotes = results.reduce((sum, r) => sum + (r.notesCreated || 0), 0)
+
     return NextResponse.json({
       success: true,
       results,
-      message: `Processed ${results.filter((r) => r.success).length} of ${files.length} files`,
+      message: `Created ${totalNotes} notes from ${files.length} file(s)`,
     })
   } catch (error) {
     console.error('Upload error:', error)
