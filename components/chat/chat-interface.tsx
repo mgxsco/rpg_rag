@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ChatMessageComponent } from './chat-message'
 import { ChatMessage } from '@/lib/types'
-import { Send, Trash2, Loader2, BookOpen, Sparkles } from 'lucide-react'
+import { Send, Trash2, Loader2, MessageSquare, Search } from 'lucide-react'
 
 export type ChatMode = 'rag' | 'direct'
 
@@ -123,8 +123,8 @@ export function ChatInterface({
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              <BookOpen className="h-4 w-4" />
-              <span>Knowledge Base</span>
+              <MessageSquare className="h-4 w-4" />
+              <span>AI Chat</span>
             </button>
             <button
               type="button"
@@ -135,8 +135,8 @@ export function ChatInterface({
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              <Sparkles className="h-4 w-4" />
-              <span>D&D Expert</span>
+              <Search className="h-4 w-4" />
+              <span>Search Only</span>
             </button>
           </div>
 
@@ -146,8 +146,8 @@ export function ChatInterface({
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={mode === 'rag'
-                ? "Ask about your campaign..."
-                : "Ask about D&D rules, lore, or mechanics..."
+                ? "Ask a question about your campaign..."
+                : "Search your campaign knowledge base..."
               }
               className="min-h-[60px] resize-none"
               disabled={sending}
@@ -162,8 +162,8 @@ export function ChatInterface({
           </div>
           <p className="text-xs text-muted-foreground mt-2">
             {mode === 'rag'
-              ? 'Searches your campaign wiki for answers'
-              : 'General D&D knowledge without campaign context'
+              ? 'AI searches your wiki and generates a response'
+              : 'Returns matching results directly without AI'
             }
           </p>
         </form>

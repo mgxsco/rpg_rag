@@ -3,7 +3,7 @@
 import { ChatMessage } from '@/lib/types'
 import { SourceReferences } from './source-references'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Bot, User } from 'lucide-react'
+import { Bot, User, Search } from 'lucide-react'
 
 interface ChatMessageComponentProps {
   message: ChatMessage
@@ -16,12 +16,19 @@ export function ChatMessageComponent({
 }: ChatMessageComponentProps) {
   const isAssistant = message.role === 'assistant'
 
+  // Detect if this is a search-only result (direct mode)
+  const isSearchResult = message.content?.startsWith('Found ') || message.content?.startsWith('No matching')
+
   return (
     <div className={`flex gap-3 ${isAssistant ? '' : 'flex-row-reverse'}`}>
       <Avatar className={`h-8 w-8 ${isAssistant ? 'bg-primary' : 'bg-secondary'}`}>
         <AvatarFallback>
           {isAssistant ? (
-            <Bot className="h-4 w-4 text-primary-foreground" />
+            isSearchResult ? (
+              <Search className="h-4 w-4 text-primary-foreground" />
+            ) : (
+              <Bot className="h-4 w-4 text-primary-foreground" />
+            )
           ) : (
             <User className="h-4 w-4" />
           )}
@@ -40,7 +47,11 @@ export function ChatMessageComponent({
         </div>
 
         {isAssistant && message.sources && message.sources.length > 0 && (
-          <SourceReferences sources={message.sources} campaignId={campaignId} />
+          <SourceReferences
+            sources={message.sources}
+            campaignId={campaignId}
+            showContent={isSearchResult}
+          />
         )}
       </div>
     </div>

@@ -69,6 +69,25 @@ export async function POST(
   }
 
   try {
+    // Direct mode: just return search results without AI
+    if (mode === 'direct') {
+      const { searchSimilarChunks } = await import('@/lib/ai/rag')
+      const settings = (await import('@/lib/campaign-settings')).getCampaignSettings(campaign.settings)
+
+      const results = await searchSimilarChunks(params.campaignId, message, {
+        limit: settings.search.resultLimit,
+        threshold: settings.search.similarityThreshold,
+        excludeDmOnly: !isDM,
+      })
+
+      return NextResponse.json({
+        content: null,
+        sources: results,
+        mode: 'direct',
+      })
+    }
+
+    // RAG mode: search + AI response
     const response = await generateChatResponse(
       params.campaignId,
       message,
@@ -77,11 +96,10 @@ export async function POST(
         isDM,
         campaignName: campaign.name,
         settings: campaign.settings,
-        mode,
       }
     )
 
-    return NextResponse.json(response)
+    return NextResponse.json({ ...response, mode: 'rag' })
   } catch (error) {
     console.error('Chat error:', error)
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'

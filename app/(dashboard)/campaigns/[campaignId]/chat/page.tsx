@@ -56,9 +56,19 @@ export default function ChatPage({
         throw new Error(data.error)
       }
 
+      // Handle direct mode: show search results without AI response
+      let responseContent = data.content
+      if (data.mode === 'direct' && !data.content) {
+        if (data.sources && data.sources.length > 0) {
+          responseContent = `Found ${data.sources.length} matching result${data.sources.length === 1 ? '' : 's'}:`
+        } else {
+          responseContent = 'No matching results found. Try different search terms.'
+        }
+      }
+
       const assistantMessage: ChatMessage = {
         role: 'assistant',
-        content: data.content,
+        content: responseContent,
         sources: data.sources,
       }
 
