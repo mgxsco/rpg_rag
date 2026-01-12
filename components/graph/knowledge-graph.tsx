@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useCallback, useEffect, useState } from 'react'
+import { useRef, useCallback, useEffect, useState, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 
 // Dynamically import force graph to avoid SSR issues
@@ -37,16 +37,52 @@ interface KnowledgeGraphProps {
   centerId?: string | null
 }
 
+// Medieval/Fantasy color palette for entity types
 const ENTITY_TYPE_COLORS: Record<string, string> = {
-  npc: '#22c55e',
-  location: '#f59e0b',
-  item: '#a855f7',
-  quest: '#06b6d4',
-  faction: '#f97316',
-  lore: '#f43f5e',
-  session: '#3b82f6',
-  player_character: '#6366f1',
-  freeform: '#6b7280',
+  // Characters - warm greens (forest/nature)
+  npc: '#4a7c59',           // Forest green
+  player_character: '#2d5a3d', // Dark forest
+  creature: '#6b8e4e',      // Moss green
+
+  // Places - warm amber/gold (torchlit maps)
+  location: '#c4883a',      // Warm amber
+  region: '#a67c3d',        // Antique gold
+
+  // Items - rich purples (magical)
+  item: '#7b5ea7',          // Royal purple
+  artifact: '#9b6bb5',      // Mystical violet
+  spell: '#8e6faf',         // Arcane purple
+  ability: '#a077bf',       // Light arcane
+
+  // Quests & Events - deep burgundy/crimson
+  quest: '#8b3a3a',         // Parchment red
+  event: '#a04545',         // Blood red
+
+  // Organizations - burnt orange/sienna
+  faction: '#b5651d',       // Burnt sienna
+  organization: '#cd7f32',  // Bronze
+
+  // Knowledge - deep blue (ink)
+  lore: '#4a5568',          // Ink gray
+  session: '#3d5a80',       // Scholar blue
+
+  // Divine/Racial - gold/teal
+  deity: '#d4a942',         // Divine gold
+  race: '#457b6d',          // Verdigris
+  class: '#5c7a5e',         // Sage green
+
+  // Conditions/Materials - earth tones
+  condition: '#8b4513',     // Saddle brown
+  material: '#6b5344',      // Umber
+}
+
+const FALLBACK_COLORS = ['#6b5344', '#5c5c5c', '#7a6a5a', '#4a5568', '#5a4a3a']
+
+function getTypeColor(type: string): string {
+  if (ENTITY_TYPE_COLORS[type]) return ENTITY_TYPE_COLORS[type]
+  // Generate consistent color based on type name hash
+  const hash = type.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+  return FALLBACK_COLORS[hash % FALLBACK_COLORS.length]
 }
 
 export function KnowledgeGraph({
@@ -57,8 +93,11 @@ export function KnowledgeGraph({
 }: KnowledgeGraphProps) {
   const graphRef = useRef<any>(null)
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
-  const [hoveredNode, setHoveredNode] = useState<string | null>(null)
-  const [hoveredLink, setHoveredLink] = useState<string | null>(null)
+  // Use refs for hover state to avoid re-renders that restart the simulation
+  const hoveredNodeRef = useRef<string | null>(null)
+  const hoveredLinkRef = useRef<string | null>(null)
+  // Only use state for the tooltip display
+  const [tooltipNode, setTooltipNode] = useState<string | null>(null)
 
   useEffect(() => {
     const updateDimensions = () => {
@@ -110,21 +149,30 @@ export function KnowledgeGraph({
     [onNodeDoubleClick]
   )
 
+  // Precompute link counts for each node
+  const nodeLinkCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const link of data.links) {
+      const sourceId = typeof link.source === 'string' ? link.source : link.source.id
+      const targetId = typeof link.target === 'string' ? link.target : link.target.id
+      counts.set(sourceId, (counts.get(sourceId) || 0) + 1)
+      counts.set(targetId, (counts.get(targetId) || 0) + 1)
+    }
+    return counts
+  }, [data.links])
+
   const nodeCanvasObject = useCallback(
     (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const label = node.name || ''
       const fontSize = Math.max(10, 14 / globalScale)
       ctx.font = `${fontSize}px Inter, system-ui, sans-serif`
 
-      const nodeColor = ENTITY_TYPE_COLORS[node.type] || '#6b7280'
-      const isHovered = hoveredNode === node.id
+      const nodeColor = getTypeColor(node.type)
+      const isHovered = hoveredNodeRef.current === node.id
       const isCentered = centerId === node.id
 
-      // Node size based on connections
-      const linkCount = data.links.filter(
-        l => (l.source as any).id === node.id || (l.target as any).id === node.id ||
-             l.source === node.id || l.target === node.id
-      ).length
+      // Node size based on connections (use precomputed counts)
+      const linkCount = nodeLinkCounts.get(node.id) || 0
       const baseSize = 8 + Math.min(linkCount * 2, 12)
       const nodeSize = isHovered ? baseSize * 1.3 : (isCentered ? baseSize * 1.2 : baseSize)
 
@@ -142,8 +190,8 @@ export function KnowledgeGraph({
       ctx.fillStyle = nodeColor
       ctx.fill()
 
-      // Draw border
-      ctx.strokeStyle = isHovered || isCentered ? '#ffffff' : 'rgba(255,255,255,0.5)'
+      // Draw border - golden highlight
+      ctx.strokeStyle = isHovered || isCentered ? '#d4a942' : 'rgba(212, 169, 66, 0.4)'
       ctx.lineWidth = (isHovered || isCentered ? 2.5 : 1.5) / globalScale
       ctx.stroke()
 
@@ -152,8 +200,8 @@ export function KnowledgeGraph({
       const padding = 4
       const labelY = node.y + nodeSize + fontSize + 2
 
-      // Background for label
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.8)'
+      // Background for label - parchment style
+      ctx.fillStyle = 'rgba(42, 35, 24, 0.9)'
       ctx.fillRect(
         node.x - textWidth / 2 - padding,
         labelY - fontSize / 2 - padding / 2,
@@ -161,13 +209,13 @@ export function KnowledgeGraph({
         fontSize + padding
       )
 
-      // Label text
+      // Label text - parchment color
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.fillStyle = isHovered || isCentered ? '#ffffff' : 'rgba(255,255,255,0.8)'
+      ctx.fillStyle = isHovered || isCentered ? '#e8dcc8' : 'rgba(232, 220, 200, 0.85)'
       ctx.fillText(label, node.x, labelY)
     },
-    [hoveredNode, centerId, data.links]
+    [centerId, nodeLinkCounts]
   )
 
   const linkCanvasObject = useCallback(
@@ -177,14 +225,14 @@ export function KnowledgeGraph({
 
       if (!start.x || !end.x) return
 
-      const isHovered = hoveredLink === link.id ||
-        hoveredNode === start.id || hoveredNode === end.id
+      const isHovered = hoveredLinkRef.current === link.id ||
+        hoveredNodeRef.current === start.id || hoveredNodeRef.current === end.id
 
-      // Draw line
+      // Draw line - parchment/golden tones
       ctx.beginPath()
       ctx.moveTo(start.x, start.y)
       ctx.lineTo(end.x, end.y)
-      ctx.strokeStyle = isHovered ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.15)'
+      ctx.strokeStyle = isHovered ? 'rgba(212, 169, 66, 0.7)' : 'rgba(139, 119, 90, 0.25)'
       ctx.lineWidth = isHovered ? 2 : 1
       ctx.stroke()
 
@@ -194,14 +242,14 @@ export function KnowledgeGraph({
         const midY = (start.y + end.y) / 2
 
         const fontSize = Math.max(9, 11 / globalScale)
-        ctx.font = `${fontSize}px Inter, system-ui, sans-serif`
+        ctx.font = `${fontSize}px Crimson Pro, Georgia, serif`
 
         const labelText = link.label
         const textWidth = ctx.measureText(labelText).width
         const padding = 3
 
-        // Background
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.9)'
+        // Background - dark parchment
+        ctx.fillStyle = 'rgba(42, 35, 24, 0.95)'
         ctx.fillRect(
           midX - textWidth / 2 - padding,
           midY - fontSize / 2 - padding / 2,
@@ -209,18 +257,18 @@ export function KnowledgeGraph({
           fontSize + padding
         )
 
-        // Text
+        // Text - gold/parchment
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
-        ctx.fillStyle = '#94a3b8'
+        ctx.fillStyle = '#d4a942'
         ctx.fillText(labelText, midX, midY)
       }
     },
-    [hoveredNode, hoveredLink]
+    [] // No dependencies - refs don't trigger re-renders
   )
 
-  // Transform data for the graph library
-  const graphData = {
+  // Memoize graph data transformation to prevent unnecessary re-renders
+  const graphData = useMemo(() => ({
     nodes: data.nodes.map((node) => ({
       ...node,
     })),
@@ -229,10 +277,10 @@ export function KnowledgeGraph({
       source: typeof link.source === 'string' ? link.source : link.source.id,
       target: typeof link.target === 'string' ? link.target : link.target.id,
     })),
-  }
+  }), [data])
 
   return (
-    <div id="knowledge-graph-container" className="w-full h-[600px] bg-slate-900 relative">
+    <div id="knowledge-graph-container" className="w-full h-[600px] bg-[#2a2318] relative border-2 border-[hsl(30_25%_30%)]">
       <ForceGraph2D
         ref={graphRef}
         graphData={graphData}
@@ -241,10 +289,7 @@ export function KnowledgeGraph({
         nodeCanvasObject={nodeCanvasObject}
         linkCanvasObject={linkCanvasObject}
         nodePointerAreaPaint={(node: any, color, ctx) => {
-          const linkCount = data.links.filter(
-            l => (l.source as any).id === node.id || (l.target as any).id === node.id ||
-                 l.source === node.id || l.target === node.id
-          ).length
+          const linkCount = nodeLinkCounts.get(node.id) || 0
           const baseSize = 8 + Math.min(linkCount * 2, 12)
           ctx.beginPath()
           ctx.arc(node.x, node.y, baseSize + 5, 0, 2 * Math.PI, false)
@@ -253,12 +298,17 @@ export function KnowledgeGraph({
         }}
         onNodeClick={handleNodeClick}
         onNodeRightClick={handleNodeRightClick}
-        onNodeHover={(node: any) => setHoveredNode(node?.id || null)}
-        onLinkHover={(link: any) => setHoveredLink(link?.id || null)}
+        onNodeHover={(node: any) => {
+          hoveredNodeRef.current = node?.id || null
+          setTooltipNode(node?.id || null) // Only this triggers re-render for tooltip
+        }}
+        onLinkHover={(link: any) => {
+          hoveredLinkRef.current = link?.id || null
+        }}
         linkDirectionalArrowLength={4}
         linkDirectionalArrowRelPos={0.9}
         linkCurvature={0.1}
-        backgroundColor="#0f172a"
+        backgroundColor="#2a2318"
         cooldownTicks={100}
         d3AlphaDecay={0.02}
         d3VelocityDecay={0.3}
@@ -269,16 +319,16 @@ export function KnowledgeGraph({
         }}
       />
 
-      {/* Tooltip for hovered node */}
-      {hoveredNode && (
-        <div className="absolute top-4 left-4 bg-slate-800 border border-slate-700 rounded-lg p-3 pointer-events-none">
-          <p className="font-medium text-white">
-            {data.nodes.find(n => n.id === hoveredNode)?.name}
+      {/* Tooltip for hovered node - parchment style */}
+      {tooltipNode && (
+        <div className="absolute top-4 left-4 bg-[#3d3426] border-2 border-[#6b5a45] rounded-sm p-3 pointer-events-none shadow-lg">
+          <p className="font-medium text-[#e8dcc8]" style={{ fontFamily: 'Cinzel, serif' }}>
+            {data.nodes.find(n => n.id === tooltipNode)?.name}
           </p>
-          <p className="text-sm text-slate-400 capitalize">
-            {data.nodes.find(n => n.id === hoveredNode)?.type?.replace('_', ' ')}
+          <p className="text-sm text-[#b8a88a] capitalize" style={{ fontFamily: 'Crimson Pro, serif' }}>
+            {data.nodes.find(n => n.id === tooltipNode)?.type?.replace('_', ' ')}
           </p>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-[#8a7a66] mt-1">
             Click to view, right-click to center
           </p>
         </div>

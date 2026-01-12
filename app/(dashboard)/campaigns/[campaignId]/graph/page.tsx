@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
 import { KnowledgeGraph } from '@/components/graph/knowledge-graph'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -38,23 +38,63 @@ interface GraphStats {
   linksByType: Record<string, number>
 }
 
-const ENTITY_TYPES = [
-  { value: 'npc', label: 'NPC', color: '#22c55e' },
-  { value: 'location', label: 'Location', color: '#f59e0b' },
-  { value: 'item', label: 'Item', color: '#a855f7' },
-  { value: 'quest', label: 'Quest', color: '#06b6d4' },
-  { value: 'faction', label: 'Faction', color: '#f97316' },
-  { value: 'lore', label: 'Lore', color: '#f43f5e' },
-  { value: 'session', label: 'Session', color: '#3b82f6' },
-  { value: 'player_character', label: 'Player Character', color: '#6366f1' },
-  { value: 'freeform', label: 'Freeform', color: '#6b7280' },
-]
+// Medieval/Fantasy color palette for entity types
+const TYPE_COLORS: Record<string, string> = {
+  // Characters - warm greens (forest/nature)
+  npc: '#4a7c59',           // Forest green
+  player_character: '#2d5a3d', // Dark forest
+  creature: '#6b8e4e',      // Moss green
 
-export default function GraphPage({
-  params,
-}: {
-  params: { campaignId: string }
-}) {
+  // Places - warm amber/gold (torchlit maps)
+  location: '#c4883a',      // Warm amber
+  region: '#a67c3d',        // Antique gold
+
+  // Items - rich purples (magical)
+  item: '#7b5ea7',          // Royal purple
+  artifact: '#9b6bb5',      // Mystical violet
+  spell: '#8e6faf',         // Arcane purple
+  ability: '#a077bf',       // Light arcane
+
+  // Quests & Events - deep burgundy/crimson
+  quest: '#8b3a3a',         // Parchment red
+  event: '#a04545',         // Blood red
+
+  // Organizations - burnt orange/sienna
+  faction: '#b5651d',       // Burnt sienna
+  organization: '#cd7f32',  // Bronze
+
+  // Knowledge - deep blue (ink)
+  lore: '#4a5568',          // Ink gray
+  session: '#3d5a80',       // Scholar blue
+
+  // Divine/Racial - gold/teal
+  deity: '#d4a942',         // Divine gold
+  race: '#457b6d',          // Verdigris
+  class: '#5c7a5e',         // Sage green
+
+  // Conditions/Materials - earth tones
+  condition: '#8b4513',     // Saddle brown
+  material: '#6b5344',      // Umber
+}
+
+const FALLBACK_COLORS = ['#6b5344', '#5c5c5c', '#7a6a5a', '#4a5568', '#5a4a3a']
+
+function getTypeColor(type: string): string {
+  if (TYPE_COLORS[type]) return TYPE_COLORS[type]
+  // Generate consistent color based on type name hash
+  const hash = type.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+  return FALLBACK_COLORS[hash % FALLBACK_COLORS.length]
+}
+
+function formatEntityType(type: string): string {
+  return type
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
+export default function GraphPage() {
+  const params = useParams<{ campaignId: string }>()
   const [graphData, setGraphData] = useState<GraphData | null>(null)
   const [stats, setStats] = useState<GraphStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -62,15 +102,16 @@ export default function GraphPage({
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set())
   const [centerId, setCenterId] = useState<string | null>(null)
   const router = useRouter()
+  const campaignId = params.campaignId
 
   useEffect(() => {
     loadGraphData()
-  }, [params.campaignId])
+  }, [campaignId])
 
   const loadGraphData = async (centerEntity?: string, filterType?: string) => {
     setLoading(true)
     try {
-      let url = `/api/campaigns/${params.campaignId}/graph?source=entities`
+      let url = `/api/campaigns/${campaignId}/graph?source=entities`
       if (centerEntity) url += `&center=${centerEntity}&depth=2`
       if (filterType) url += `&type=${filterType}`
 
@@ -87,7 +128,7 @@ export default function GraphPage({
   }
 
   const handleNodeClick = (nodeId: string) => {
-    router.push(`/campaigns/${params.campaignId}/entities/${nodeId}`)
+    router.push(`/campaigns/${campaignId}/entities/${nodeId}`)
   }
 
   const handleNodeDoubleClick = (nodeId: string) => {
@@ -127,7 +168,7 @@ export default function GraphPage({
 
   return (
     <div className="flex gap-6">
-      <CampaignSidebar campaignId={params.campaignId} isDM={isDM} />
+      <CampaignSidebar campaignId={campaignId} isDM={isDM} />
 
       <div className="flex-1">
         <div className="flex items-center justify-between mb-6">
@@ -147,32 +188,36 @@ export default function GraphPage({
           )}
         </div>
 
-        {/* Type filters */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          <div className="flex items-center gap-2 mr-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Filter:</span>
+        {/* Type filters - dynamically generated from available types */}
+        {stats && Object.keys(stats.nodesByType).length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            <div className="flex items-center gap-2 mr-2">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Filter:</span>
+            </div>
+            {Object.entries(stats.nodesByType)
+              .sort(([, a], [, b]) => b - a) // Sort by count descending
+              .map(([typeValue, count]) => {
+                const color = getTypeColor(typeValue)
+                const isSelected = selectedTypes.has(typeValue)
+                return (
+                  <Badge
+                    key={typeValue}
+                    variant={isSelected ? 'default' : 'outline'}
+                    className="cursor-pointer"
+                    style={isSelected ? { backgroundColor: color } : undefined}
+                    onClick={() => toggleTypeFilter(typeValue)}
+                  >
+                    <div
+                      className="w-2 h-2 rounded-full mr-1"
+                      style={{ backgroundColor: color }}
+                    />
+                    {formatEntityType(typeValue)} ({count})
+                  </Badge>
+                )
+              })}
           </div>
-          {ENTITY_TYPES.map((type) => {
-            const count = stats?.nodesByType[type.value] || 0
-            const isSelected = selectedTypes.has(type.value)
-            return (
-              <Badge
-                key={type.value}
-                variant={isSelected ? 'default' : 'outline'}
-                className="cursor-pointer"
-                style={isSelected ? { backgroundColor: type.color } : undefined}
-                onClick={() => toggleTypeFilter(type.value)}
-              >
-                <div
-                  className="w-2 h-2 rounded-full mr-1"
-                  style={{ backgroundColor: type.color }}
-                />
-                {type.label} ({count})
-              </Badge>
-            )
-          })}
-        </div>
+        )}
 
         <Card className="overflow-hidden">
           <CardContent className="p-0">
@@ -200,18 +245,22 @@ export default function GraphPage({
           </CardContent>
         </Card>
 
-        {/* Legend */}
-        <div className="mt-4 flex flex-wrap gap-4 text-sm">
-          {ENTITY_TYPES.map((type) => (
-            <div key={type.value} className="flex items-center gap-2">
-              <div
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: type.color }}
-              />
-              <span>{type.label}</span>
-            </div>
-          ))}
-        </div>
+        {/* Legend - dynamically generated from available types */}
+        {stats && Object.keys(stats.nodesByType).length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-4 text-sm">
+            {Object.keys(stats.nodesByType)
+              .sort()
+              .map((typeValue) => (
+                <div key={typeValue} className="flex items-center gap-2">
+                  <div
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: getTypeColor(typeValue) }}
+                  />
+                  <span>{formatEntityType(typeValue)}</span>
+                </div>
+              ))}
+          </div>
+        )}
 
         <p className="mt-4 text-sm text-muted-foreground">
           Click a node to view the entity. Double-click to center the graph on that entity.

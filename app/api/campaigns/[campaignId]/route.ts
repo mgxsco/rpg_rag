@@ -44,6 +44,7 @@ export async function GET(
     ...campaign,
     isDM,
     userRole: isDM ? 'dm' : userRole || 'viewer',
+    currentUserId: session.user.id,
   })
 }
 
@@ -70,7 +71,7 @@ export async function PUT(
   }
 
   const body = await request.json()
-  const { name, description, language } = body
+  const { name, description, language, settings } = body
 
   const updateData: Record<string, any> = {
     name,
@@ -80,6 +81,10 @@ export async function PUT(
 
   if (language) {
     updateData.language = language
+  }
+
+  if (settings !== undefined) {
+    updateData.settings = settings
   }
 
   const [updated] = await db

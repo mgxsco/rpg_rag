@@ -9,6 +9,7 @@ import {
   unique,
   index,
   customType,
+  jsonb,
 } from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
 
@@ -88,12 +89,37 @@ export const languageEnum = [
   'en', 'pt-BR', 'pt', 'es', 'fr', 'de', 'it', 'nl', 'pl', 'ru', 'ja', 'ko', 'zh'
 ] as const
 
+// Campaign settings type
+export interface CampaignSettings {
+  extraction?: {
+    aggressiveness?: 'conservative' | 'balanced' | 'obsessive'
+    chunkSize?: number
+    confidenceThreshold?: number
+    enableAutoMerge?: boolean
+    enableRelationships?: boolean
+  }
+  visibility?: {
+    defaultDmOnly?: boolean
+    dmOnlyEntityTypes?: string[]
+  }
+  search?: {
+    similarityThreshold?: number
+    resultLimit?: number
+    enablePlayerChat?: boolean
+  }
+  graph?: {
+    maxNodes?: number
+    showLinkLabels?: 'always' | 'on-hover' | 'never'
+  }
+}
+
 // Campaign tables
 export const campaigns = pgTable('campaigns', {
   id: uuid('id').defaultRandom().primaryKey(),
   name: text('name').notNull(),
   description: text('description'),
   language: text('language').default('en').notNull(),
+  settings: jsonb('settings').$type<CampaignSettings>().default({}),
   ownerId: uuid('owner_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
@@ -112,9 +138,33 @@ export const campaignMembers = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     role: text('role', { enum: ['dm', 'player', 'viewer'] }).notNull(),
+    joinedAt: timestamp('joined_at').defaultNow().notNull(),
   },
   (table) => ({
     uniqueMember: unique().on(table.campaignId, table.userId),
+  })
+)
+
+// Campaign invites for sharing access
+export const campaignInvites = pgTable(
+  'campaign_invites',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    code: text('code').notNull().unique(), // 8-char invite code (e.g., "ABC12345")
+    role: text('role', { enum: ['player', 'viewer'] }).notNull().default('player'),
+    usesRemaining: integer('uses_remaining'), // NULL = unlimited
+    expiresAt: timestamp('expires_at'), // NULL = never expires
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    codeIdx: index('campaign_invites_code_idx').on(table.code),
+    campaignIdx: index('campaign_invites_campaign_idx').on(table.campaignId),
   })
 )
 
@@ -219,6 +269,7 @@ export const campaignsRelations = relations(campaigns, ({ one, many }) => ({
     references: [users.id],
   }),
   members: many(campaignMembers),
+  invites: many(campaignInvites),
   notes: many(notes),
 }))
 
@@ -229,6 +280,17 @@ export const campaignMembersRelations = relations(campaignMembers, ({ one }) => 
   }),
   user: one(users, {
     fields: [campaignMembers.userId],
+    references: [users.id],
+  }),
+}))
+
+export const campaignInvitesRelations = relations(campaignInvites, ({ one }) => ({
+  campaign: one(campaigns, {
+    fields: [campaignInvites.campaignId],
+    references: [campaigns.id],
+  }),
+  creator: one(users, {
+    fields: [campaignInvites.createdBy],
     references: [users.id],
   }),
 }))
@@ -312,18 +374,32 @@ export const documents = pgTable(
   })
 )
 
-// Entity types enum
-export const entityTypeEnum = [
-  'session',
+// Common entity types (not enforced - AI can create any type)
+export const commonEntityTypes = [
   'npc',
   'location',
   'item',
   'lore',
   'quest',
   'faction',
+  'session',
   'player_character',
-  'freeform',
+  'creature',
+  'spell',
+  'event',
+  'organization',
+  'artifact',
+  'region',
+  'deity',
+  'race',
+  'class',
+  'ability',
+  'condition',
+  'material',
 ] as const
+
+// Legacy alias for backward compatibility
+export const entityTypeEnum = commonEntityTypes
 
 // Entities (wiki pages)
 export const entities = pgTable(
@@ -337,7 +413,7 @@ export const entities = pgTable(
     // Content
     name: text('name').notNull(),
     canonicalName: text('canonical_name').notNull(), // For deduplication
-    entityType: text('entity_type', { enum: entityTypeEnum }).notNull(),
+    entityType: text('entity_type').notNull(), // Free-form type decided by AI
     content: text('content').default(''),
 
     // Metadata
@@ -561,6 +637,7 @@ export const entityVersionsRelations = relations(entityVersions, ({ one }) => ({
 export type User = typeof users.$inferSelect
 export type Campaign = typeof campaigns.$inferSelect
 export type CampaignMember = typeof campaignMembers.$inferSelect
+export type CampaignInvite = typeof campaignInvites.$inferSelect
 export type Note = typeof notes.$inferSelect
 export type NoteLink = typeof noteLinks.$inferSelect
 export type NoteVersion = typeof noteVersions.$inferSelect

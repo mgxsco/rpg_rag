@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Plus, Users, BookOpen } from 'lucide-react'
-import { ensureCampaignLanguageColumn } from '@/lib/db/migrations'
+import { ensureCampaignLanguageColumn, ensureCampaignSettingsColumn } from '@/lib/db/migrations'
 
 export default async function CampaignsPage() {
   const session = await getSession()
@@ -16,8 +16,9 @@ export default async function CampaignsPage() {
     redirect('/login')
   }
 
-  // Ensure language column exists before querying
+  // Ensure language and settings columns exist before querying
   await ensureCampaignLanguageColumn()
+  await ensureCampaignSettingsColumn()
 
   // Get owned campaigns
   const ownedCampaigns = await db.query.campaigns.findMany({

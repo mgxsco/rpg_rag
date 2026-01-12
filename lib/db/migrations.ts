@@ -14,6 +14,19 @@ export async function ensureCampaignLanguageColumn(): Promise<void> {
 }
 
 /**
+ * Ensure the settings JSONB column exists on campaigns table
+ * This is safe to run multiple times
+ */
+export async function ensureCampaignSettingsColumn(): Promise<void> {
+  try {
+    await sql`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS settings JSONB DEFAULT '{}'::jsonb`
+  } catch (error) {
+    // Ignore if column already exists or other non-critical errors
+    console.log('[Migration] Campaign settings column check:', error)
+  }
+}
+
+/**
  * Ensure all v2 knowledge graph tables exist
  * This is safe to run multiple times
  */
@@ -27,8 +40,9 @@ export async function ensureKnowledgeGraphTables(): Promise<{ migrated: boolean;
       ) as exists
     `
 
-    // Also ensure campaigns has language column
+    // Also ensure campaigns has language and settings columns
     await ensureCampaignLanguageColumn()
+    await ensureCampaignSettingsColumn()
 
     if (result.rows[0]?.exists) {
       return { migrated: false }
@@ -139,4 +153,72 @@ export async function ensureKnowledgeGraphTables(): Promise<{ migrated: boolean;
     console.error('[Migration] Auto-migration failed:', error)
     return { migrated: false, error: String(error) }
   }
+}
+
+/**
+ * Ensure the campaign_invites table exists for invite system
+ * This is safe to run multiple times
+ */
+export async function ensureCampaignInvitesTable(): Promise<{ migrated: boolean; error?: string }> {
+  try {
+    // Check if campaign_invites table exists
+    const result = await sql`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_name = 'campaign_invites'
+      ) as exists
+    `
+
+    if (result.rows[0]?.exists) {
+      return { migrated: false }
+    }
+
+    console.log('[Migration] Creating campaign_invites table...')
+
+    // Create campaign_invites table
+    await sql`
+      CREATE TABLE IF NOT EXISTS campaign_invites (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+        code TEXT NOT NULL UNIQUE,
+        role TEXT NOT NULL DEFAULT 'player' CHECK (role IN ('player', 'viewer')),
+        uses_remaining INTEGER,
+        expires_at TIMESTAMP,
+        created_by UUID NOT NULL REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `
+    await sql`CREATE INDEX IF NOT EXISTS campaign_invites_code_idx ON campaign_invites(code)`
+    await sql`CREATE INDEX IF NOT EXISTS campaign_invites_campaign_idx ON campaign_invites(campaign_id)`
+
+    console.log('[Migration] campaign_invites table created')
+    return { migrated: true }
+  } catch (error) {
+    console.error('[Migration] campaign_invites migration failed:', error)
+    return { migrated: false, error: String(error) }
+  }
+}
+
+/**
+ * Ensure the joined_at column exists on campaign_members table
+ * This is safe to run multiple times
+ */
+export async function ensureCampaignMembersJoinedAt(): Promise<void> {
+  try {
+    await sql`ALTER TABLE campaign_members ADD COLUMN IF NOT EXISTS joined_at TIMESTAMP DEFAULT NOW() NOT NULL`
+  } catch (error) {
+    // Ignore if column already exists
+    console.log('[Migration] Campaign members joined_at column check:', error)
+  }
+}
+
+/**
+ * Run all migrations
+ */
+export async function runAllMigrations(): Promise<void> {
+  await ensureCampaignLanguageColumn()
+  await ensureCampaignSettingsColumn()
+  await ensureKnowledgeGraphTables()
+  await ensureCampaignInvitesTable()
+  await ensureCampaignMembersJoinedAt()
 }

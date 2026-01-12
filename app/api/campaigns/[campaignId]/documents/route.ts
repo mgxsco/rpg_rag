@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { db, campaigns, campaignMembers, documents, entities, relationships, entitySources } from '@/lib/db'
+import { db, campaigns, campaignMembers, documents, entities, relationships, entitySources, CampaignSettings } from '@/lib/db'
 import { eq, and } from 'drizzle-orm'
-import { runExtractionPipeline } from '@/lib/ai/extraction/pipeline'
+import { runExtractionPipeline, ExtractionSettings } from '@/lib/ai/extraction/pipeline'
 import { findExistingEntity, getExistingEntityNames, mergeAliases } from '@/lib/ai/extraction/dedup'
 import { ensureKnowledgeGraphTables } from '@/lib/db/migrations'
+import { getCampaignSettings } from '@/lib/campaign-settings'
 
 // Dynamic import for pdf-parse
 async function parsePDF(buffer: Buffer): Promise<string> {
@@ -138,15 +139,26 @@ export async function POST(
       // 2. Get existing entity names for deduplication
       const existingNames = await getExistingEntityNames(params.campaignId)
 
-      // 3. Run extraction pipeline
+      // 3. Get campaign settings for extraction
+      const campaignSettings = getCampaignSettings((campaign as any).settings)
+      const extractionSettings: ExtractionSettings = {
+        chunkSize: campaignSettings.extraction.chunkSize,
+        aggressiveness: campaignSettings.extraction.aggressiveness,
+        confidenceThreshold: campaignSettings.extraction.confidenceThreshold,
+        enableRelationships: campaignSettings.extraction.enableRelationships,
+      }
+
+      // 4. Run extraction pipeline
       console.log(`[Documents] Running extraction pipeline for: ${fileName} (language: ${language})`)
+      console.log(`[Documents] Using extraction settings:`, extractionSettings)
       progress.push(`Running AI extraction for: ${fileName}`)
-      const extraction = await runExtractionPipeline(content, fileName, existingNames, language)
+      const extraction = await runExtractionPipeline(content, fileName, existingNames, language, undefined, extractionSettings)
       progress.push(`Found ${extraction.entities.length} entities and ${extraction.relationships.length} relationships`)
 
-      // 4. Create or update entities
+      // 5. Create or update entities
       const createdEntities = []
       const entityIdMap = new Map<string, string>() // name -> entityId
+      const defaultDmOnly = campaignSettings.visibility.defaultDmOnly
       progress.push(`Creating entities in database...`)
 
       for (const extracted of extraction.entities) {
@@ -190,7 +202,7 @@ export async function POST(
               content: extracted.content,
               aliases: extracted.aliases,
               tags: extracted.tags,
-              isDmOnly: false,
+              isDmOnly: defaultDmOnly,
             })
             .returning()
 
@@ -217,7 +229,7 @@ export async function POST(
         }
       }
 
-      // 5. Create relationships
+      // 6. Create relationships
       const createdRelationships = []
       if (extraction.relationships.length > 0) {
         progress.push(`Creating ${extraction.relationships.length} relationships...`)

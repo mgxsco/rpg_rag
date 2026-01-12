@@ -9,39 +9,38 @@ import { Button } from '@/components/ui/button'
 import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
 import { EntityCard } from '@/components/entities/entity-card'
 import { Search, Filter, Plus, Upload, AlertTriangle } from 'lucide-react'
-import { EntityType, Entity } from '@/lib/db/schema'
+import { Entity } from '@/lib/db/schema'
 
-const ENTITY_TYPES: { value: EntityType; label: string }[] = [
-  { value: 'session', label: 'Session' },
-  { value: 'npc', label: 'NPC' },
-  { value: 'location', label: 'Location' },
-  { value: 'item', label: 'Item' },
-  { value: 'lore', label: 'Lore' },
-  { value: 'quest', label: 'Quest' },
-  { value: 'faction', label: 'Faction' },
-  { value: 'player_character', label: 'Player Character' },
-  { value: 'freeform', label: 'Freeform' },
-]
+// Format entity type for display (e.g., 'player_character' -> 'Player Character')
+function formatEntityType(type: string): string {
+  return type
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
 
 export default async function EntitiesPage({
   params,
   searchParams,
 }: {
-  params: { campaignId: string }
-  searchParams: { type?: string; search?: string }
+  params: Promise<{ campaignId: string }>
+  searchParams: Promise<{ type?: string; search?: string }>
 }) {
+  const { campaignId } = await params
+  const { type, search } = await searchParams
+
   const session = await getSession()
   if (!session?.user?.id) {
     redirect('/login')
   }
 
   const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, params.campaignId),
+    where: eq(campaigns.id, campaignId),
   })
 
   const membership = await db.query.campaignMembers.findFirst({
     where: and(
-      eq(campaignMembers.campaignId, params.campaignId),
+      eq(campaignMembers.campaignId, campaignId),
       eq(campaignMembers.userId, session.user.id)
     ),
   })
@@ -56,7 +55,7 @@ export default async function EntitiesPage({
     allEntities = await db
       .select()
       .from(entities)
-      .where(eq(entities.campaignId, params.campaignId))
+      .where(eq(entities.campaignId, campaignId))
       .orderBy(desc(entities.updatedAt))
   } catch (error) {
     console.error('[Entities] Error fetching entities:', error)
@@ -64,13 +63,13 @@ export default async function EntitiesPage({
   }
 
   // Filter by type
-  if (searchParams.type) {
-    allEntities = allEntities.filter((e) => e.entityType === searchParams.type)
+  if (type) {
+    allEntities = allEntities.filter((e) => e.entityType === type)
   }
 
   // Filter by search
-  if (searchParams.search) {
-    const searchLower = searchParams.search.toLowerCase()
+  if (search) {
+    const searchLower = search.toLowerCase()
     allEntities = allEntities.filter(
       (e) =>
         e.name.toLowerCase().includes(searchLower) ||
@@ -94,7 +93,7 @@ export default async function EntitiesPage({
 
   return (
     <div className="flex gap-6">
-      <CampaignSidebar campaignId={params.campaignId} isDM={isDM} />
+      <CampaignSidebar campaignId={campaignId} isDM={isDM} />
 
       <div className="flex-1">
         <div className="flex items-center justify-between mb-6">
@@ -105,13 +104,13 @@ export default async function EntitiesPage({
             </p>
           </div>
           <div className="flex gap-2">
-            <Link href={`/campaigns/${params.campaignId}/entities/upload`}>
+            <Link href={`/campaigns/${campaignId}/entities/upload`}>
               <Button variant="outline">
                 <Upload className="h-4 w-4 mr-2" />
                 Upload Document
               </Button>
             </Link>
-            <Link href={`/campaigns/${params.campaignId}/entities/new`}>
+            <Link href={`/campaigns/${campaignId}/entities/new`}>
               <Button>
                 <Plus className="h-4 w-4 mr-2" />
                 New Entity
@@ -127,34 +126,36 @@ export default async function EntitiesPage({
               <Input
                 name="search"
                 placeholder="Search entities..."
-                defaultValue={searchParams.search}
+                defaultValue={search}
                 className="pl-9"
               />
             </div>
           </form>
 
           <div className="flex flex-wrap gap-2">
-            <Link href={`/campaigns/${params.campaignId}/entities`}>
+            <Link href={`/campaigns/${campaignId}/entities`}>
               <Badge
-                variant={!searchParams.type ? 'default' : 'outline'}
+                variant={!type ? 'default' : 'outline'}
                 className="cursor-pointer"
               >
                 All ({stats.total})
               </Badge>
             </Link>
-            {ENTITY_TYPES.map((type) => (
-              <Link
-                key={type.value}
-                href={`/campaigns/${params.campaignId}/entities?type=${type.value}`}
-              >
-                <Badge
-                  variant={searchParams.type === type.value ? 'default' : 'outline'}
-                  className="cursor-pointer"
+            {Object.entries(stats.byType)
+              .sort(([, a], [, b]) => b - a) // Sort by count descending
+              .map(([typeValue, count]) => (
+                <Link
+                  key={typeValue}
+                  href={`/campaigns/${campaignId}/entities?type=${typeValue}`}
                 >
-                  {type.label} ({stats.byType[type.value] || 0})
-                </Badge>
-              </Link>
-            ))}
+                  <Badge
+                    variant={type === typeValue ? 'default' : 'outline'}
+                    className="cursor-pointer"
+                  >
+                    {formatEntityType(typeValue)} ({count})
+                  </Badge>
+                </Link>
+              ))}
           </div>
         </div>
 
@@ -175,7 +176,7 @@ export default async function EntitiesPage({
               <EntityCard
                 key={entity.id}
                 entity={entity}
-                campaignId={params.campaignId}
+                campaignId={campaignId}
               />
             ))}
           </div>
@@ -184,18 +185,18 @@ export default async function EntitiesPage({
             <Filter className="h-12 w-12 mx-auto mb-4" />
             <h3 className="text-lg font-medium mb-2">No entities found</h3>
             <p className="mb-4">
-              {searchParams.type || searchParams.search
+              {type || search
                 ? 'Try adjusting your filters'
                 : 'Upload a document or create an entity to get started'}
             </p>
             <div className="flex justify-center gap-2">
-              <Link href={`/campaigns/${params.campaignId}/entities/upload`}>
+              <Link href={`/campaigns/${campaignId}/entities/upload`}>
                 <Button variant="outline">
                   <Upload className="h-4 w-4 mr-2" />
                   Upload Document
                 </Button>
               </Link>
-              <Link href={`/campaigns/${params.campaignId}/entities/new`}>
+              <Link href={`/campaigns/${campaignId}/entities/new`}>
                 <Button>
                   <Plus className="h-4 w-4 mr-2" />
                   New Entity

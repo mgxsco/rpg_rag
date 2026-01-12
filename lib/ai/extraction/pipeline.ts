@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { EntityType } from '@/lib/db/schema'
+import { CampaignSettings } from '@/lib/db/schema'
+import { getCampaignSettings } from '@/lib/campaign-settings'
 
 // ============================================
 // Types
@@ -7,7 +8,7 @@ import { EntityType } from '@/lib/db/schema'
 
 export interface EntityMention {
   name: string
-  type: EntityType
+  type: string // Dynamic type decided by AI (e.g., 'npc', 'location', 'spell', 'creature', etc.)
   aliases: string[]
   description: string
   confidence: number
@@ -24,7 +25,7 @@ export interface RelationshipMention {
 export interface ExtractedEntity {
   name: string
   canonicalName: string
-  type: EntityType
+  type: string // Dynamic type decided by AI
   content: string
   aliases: string[]
   tags: string[]
@@ -127,98 +128,127 @@ interface ChunkExtraction {
   relationships: RelationshipMention[]
 }
 
-async function extractFromChunk(
-  content: string,
-  chunkIndex: number,
-  totalChunks: number,
-  language: string = 'en'
-): Promise<ChunkExtraction> {
-  console.log(`[Extraction] Processing chunk ${chunkIndex + 1}/${totalChunks} (${content.length} chars, lang: ${language})`)
+// Generate system prompt based on aggressiveness level
+function getExtractionSystemPrompt(
+  aggressiveness: 'conservative' | 'balanced' | 'obsessive',
+  languageInstruction: string
+): string {
+  const typeExamples = `
+ENTITY TYPES - Use the most specific type that fits. Common types include:
+- npc: Named characters, villains, allies, gods, demons, historical figures
+- creature: Monsters, beasts, dragons, undead, constructs
+- location: Cities, dungeons, taverns, regions, planes, buildings, rooms
+- item: Weapons, armor, potions, scrolls, artifacts, mundane objects
+- spell: Named spells, rituals, magical effects
+- ability: Skills, feats, class features, racial abilities
+- faction: Guilds, organizations, cults, armies, families, political groups
+- quest: Missions, objectives, bounties, contracts
+- event: Battles, ceremonies, historical moments, prophecies
+- lore: Legends, customs, calendar systems, magic systems
+- deity: Gods, divine beings, patrons
+- race: Species, peoples (elves, dwarves, etc.)
+- class: Character classes, professions
+- condition: Diseases, curses, magical effects
+- material: Special materials (mithril, adamantine, etc.)
+- region: Geographic areas, kingdoms, continents
+- organization: Same as faction
+- artifact: Legendary/unique items
+- session: Play session summaries
+- player_character: PC information
 
-  const anthropic = getAnthropicClient()
+You can also create NEW types if none of these fit well (e.g., "vehicle", "mount", "language", "ritual", "title", "currency", etc.)`
 
-  const languageInstruction = language !== 'en'
-    ? `IMPORTANT: The content is in ${getLanguageName(language)}. Extract entity names as they appear in the original language, but you may provide descriptions in ${getLanguageName(language)} as well.`
-    : ''
-
-  const response = await anthropic.messages.create({
-    model: 'claude-3-5-haiku-20241022',
-    max_tokens: 8192,
-    system: `You are an OBSESSIVE wiki curator. Extract ABSOLUTELY EVERYTHING from this RPG/D&D content. Miss NOTHING.
+  if (aggressiveness === 'conservative') {
+    return `You are a careful wiki curator. Extract clearly identified entities from this RPG/D&D content. Focus on entities that are explicitly named and have significant information.
 ${languageInstruction}
 
-EXTRACT THESE AS ENTITIES:
+${typeExamples}
 
-NPCs - Extract ALL of these:
-- Named characters (Gandalf, Lord Vex, Captain Maya)
-- Unnamed but titled characters ("the old wizard", "the bartender" → create name like "The Old Wizard")
-- Characters only mentioned ("my father", "the king who died" → "Father of [Character]", "The Dead King")
-- Gods, demons, spirits, ghosts
-- Ancestors, historical figures
-- Anyone spoken about in dialogue
-
-LOCATIONS - Extract ALL of these:
-- Cities, towns, villages
-- Buildings (taverns, temples, shops, houses)
-- Rooms within buildings
-- Dungeons, caves, ruins
-- Geographic features (mountains, rivers, forests)
-- Regions, kingdoms, continents
-- Planes of existence
-- Places only mentioned ("the city where I was born" → create entry)
-
-ITEMS - Extract ALL of these:
-- Weapons (swords, bows, magical staves)
-- Armor and clothing
-- Potions, scrolls, books
-- Keys, tools, mundane objects if named
-- Artifacts and relics
-- Vehicles, mounts
-- Currency types if named
-- Food/drink if named
-
-FACTIONS - Extract ALL of these:
-- Guilds, orders, organizations
-- Armies, militias
-- Cults, religions
-- Families, clans, dynasties
-- Species/races (Elves, Dwarves, Goblins)
-- Monster types as groups
-- Political parties
-
-LORE - Extract ALL of these:
-- Historical events ("The Great War", "The Sundering")
-- Prophecies, legends
-- Calendar systems, holidays
-- Customs, traditions
-- Magic systems or schools
-- Languages mentioned
-
-QUESTS - Extract ALL of these:
-- Main objectives
-- Side missions
-- Rumors of tasks
-- Bounties, contracts
-- Personal goals mentioned
-
-FREEFORM - Extract ALL of these:
-- Spells by name
-- Abilities, skills
-- Titles, epithets
-- Concepts unique to the world
-- Diseases, curses
-- Materials (mithril, dragonscale)
-
-EXAMPLE - From "The party met Grok at the Rusty Nail tavern in Millbrook. He mentioned his brother was killed by the Shadow Guild."
-Extract: Grok (npc), Rusty Nail (location), Millbrook (location), Grok's Brother (npc), Shadow Guild (faction), Murder of Grok's Brother (lore)
-
-RELATIONSHIPS: lives_in, member_of, owns, created, enemy_of, ally_of, located_in, participated_in, mentioned_in, related_to, knows, serves, rules, guards, seeks, fears, loves, hates, works_for, parent_of, child_of, sibling_of, married_to, worships, leads, follows, created_by, contains, part_of, killed_by, visited, hired_by
+RELATIONSHIPS: lives_in, member_of, owns, enemy_of, ally_of, located_in, related_to
 
 Return ONLY valid JSON:
 {
   "entities": [{
     "name": "Exact Name",
-    "type": "npc|location|item|quest|faction|lore|session|player_character|freeform",
+    "type": "most_specific_type",
+    "aliases": ["other names"],
+    "description": "Key facts only (1-2 sentences)",
+    "confidence": 0.7-1.0
+  }],
+  "relationships": [{
+    "sourceEntity": "Name",
+    "targetEntity": "Name",
+    "relationshipType": "type",
+    "reverseLabel": "reverse",
+    "excerpt": "context"
+  }]
+}
+
+Focus on quality over quantity. Only extract entities you're confident about.`
+  }
+
+  if (aggressiveness === 'balanced') {
+    return `You are a thorough wiki curator. Extract entities from this RPG/D&D content. Include both major and minor entities.
+${languageInstruction}
+
+${typeExamples}
+
+RELATIONSHIPS: lives_in, member_of, owns, created, enemy_of, ally_of, located_in, participated_in, mentioned_in, related_to, knows, serves, rules
+
+Return ONLY valid JSON:
+{
+  "entities": [{
+    "name": "Exact Name",
+    "type": "most_specific_type",
+    "aliases": ["other names"],
+    "description": "Key information (2-3 sentences)",
+    "confidence": 0.5-1.0
+  }],
+  "relationships": [{
+    "sourceEntity": "Name",
+    "targetEntity": "Name",
+    "relationshipType": "type",
+    "reverseLabel": "reverse",
+    "excerpt": "context"
+  }]
+}
+
+Aim for 10-20 entities from typical session notes. Use the most specific type for each entity.`
+  }
+
+  // Obsessive (default)
+  return `You are an OBSESSIVE wiki curator. Extract ABSOLUTELY EVERYTHING from this RPG/D&D content. Miss NOTHING.
+${languageInstruction}
+
+${typeExamples}
+
+EXTRACT EVERYTHING - Examples by type:
+- npc: Named characters, unnamed titled characters ("the old wizard" → "The Old Wizard"), mentioned characters ("my father" → "Father of [Character]"), gods, demons, ghosts
+- creature: Dragons, goblins, undead, constructs, beasts - any monster or animal
+- location: Cities, buildings, rooms, dungeons, caves, mountains, rivers, regions, planes
+- item: Weapons, armor, potions, scrolls, books, keys, artifacts, vehicles, mounts, named food/drink
+- spell: Named spells, rituals, cantrips, magical effects
+- ability: Skills, feats, class features, racial traits
+- faction: Guilds, organizations, armies, cults, religions, families, dynasties, species as groups
+- event: Battles, ceremonies, historical moments, prophecies, "The Great War"
+- lore: Legends, customs, calendar systems, magic systems, languages
+- quest: Missions, objectives, bounties, rumors of tasks
+- deity: Gods, divine beings, patrons
+- condition: Diseases, curses, blessings, magical effects on characters
+- material: Mithril, adamantine, dragonscale, special materials
+- race: Elves, dwarves, goblins as species
+- class: Fighter, wizard, rogue - character classes
+
+EXAMPLE - "The party met Grok at the Rusty Nail tavern in Millbrook. His brother was killed by a Shadow Wraith sent by the Shadow Guild. Grok offered 50 gold pieces to retrieve the Blade of Dawn."
+Extract: Grok (npc), Rusty Nail (location), Millbrook (location), Grok's Brother (npc), Shadow Wraith (creature), Shadow Guild (faction), Blade of Dawn (artifact), gold pieces (currency), Quest to Retrieve Blade (quest)
+
+RELATIONSHIPS: lives_in, member_of, owns, created, enemy_of, ally_of, located_in, participated_in, mentioned_in, related_to, knows, serves, rules, guards, seeks, fears, loves, hates, works_for, parent_of, child_of, sibling_of, married_to, worships, leads, follows, created_by, contains, part_of, killed_by, visited, hired_by, killed, attacked
+
+Return ONLY valid JSON:
+{
+  "entities": [{
+    "name": "Exact Name",
+    "type": "most_specific_type",
     "aliases": ["other names"],
     "description": "All known information (2-4 sentences)",
     "confidence": 0.5-1.0
@@ -232,7 +262,30 @@ Return ONLY valid JSON:
   }]
 }
 
-CRITICAL: Extract 20-50+ entities from typical session notes. If you extract fewer than 10, you are missing things. Every noun could be an entity!`,
+CRITICAL: Extract 20-50+ entities from typical session notes. Use the MOST SPECIFIC type for each entity. If you extract fewer than 10, you are missing things. Every noun could be an entity!`
+}
+
+async function extractFromChunk(
+  content: string,
+  chunkIndex: number,
+  totalChunks: number,
+  language: string = 'en',
+  aggressiveness: 'conservative' | 'balanced' | 'obsessive' = 'obsessive'
+): Promise<ChunkExtraction> {
+  console.log(`[Extraction] Processing chunk ${chunkIndex + 1}/${totalChunks} (${content.length} chars, lang: ${language}, mode: ${aggressiveness})`)
+
+  const anthropic = getAnthropicClient()
+
+  const languageInstruction = language !== 'en'
+    ? `IMPORTANT: The content is in ${getLanguageName(language)}. Extract entity names as they appear in the original language, but you may provide descriptions in ${getLanguageName(language)} as well.`
+    : ''
+
+  const systemPrompt = getExtractionSystemPrompt(aggressiveness, languageInstruction)
+
+  const response = await anthropic.messages.create({
+    model: 'claude-3-5-haiku-20241022',
+    max_tokens: 8192,
+    system: systemPrompt,
     messages: [{
       role: 'user',
       content: content,
@@ -521,46 +574,92 @@ export interface ExtractionProgress {
   message: string
 }
 
+export interface ExtractionSettings {
+  chunkSize?: number
+  aggressiveness?: 'conservative' | 'balanced' | 'obsessive'
+  confidenceThreshold?: number
+  enableRelationships?: boolean
+  maxChunks?: number // Limit chunks to avoid timeout (default: 15)
+  parallelBatchSize?: number // Process N chunks in parallel (default: 3)
+}
+
 export async function runExtractionPipeline(
   content: string,
   fileName: string,
   existingEntityNames: string[] = [],
   language: string = 'en',
-  onProgress?: (progress: ExtractionProgress) => void
+  onProgress?: (progress: ExtractionProgress) => void,
+  settings?: ExtractionSettings
 ): Promise<ExtractionResult> {
-  console.log(`[Extraction] Starting fast pipeline for ${fileName}`)
+  // Get settings with defaults
+  const chunkSize = settings?.chunkSize ?? 6000 // Larger default for fewer chunks
+  const aggressiveness = settings?.aggressiveness ?? 'obsessive'
+  const confidenceThreshold = settings?.confidenceThreshold ?? 0.5
+  const enableRelationships = settings?.enableRelationships ?? true
+  const maxChunks = settings?.maxChunks ?? 15 // Limit to avoid Vercel timeout
+  const parallelBatchSize = settings?.parallelBatchSize ?? 3 // Process 3 chunks in parallel
+
+  console.log(`[Extraction] Starting pipeline for ${fileName}`)
   console.log(`[Extraction] Content length: ${content.length} chars, language: ${language}`)
+  console.log(`[Extraction] Settings: chunkSize=${chunkSize}, aggressiveness=${aggressiveness}, confidence=${confidenceThreshold}, maxChunks=${maxChunks}`)
   console.log(`[Extraction] Existing entities: ${existingEntityNames.length}`)
 
-  // Chunk the document (smaller chunks = more detailed extraction)
-  const chunks = chunkDocument(content, 4000)
+  // Chunk the document using configured chunk size
+  let chunks = chunkDocument(content, chunkSize)
   console.log(`[Extraction] Split into ${chunks.length} chunks`)
+
+  // Limit chunks to avoid timeout
+  if (chunks.length > maxChunks) {
+    console.log(`[Extraction] Limiting to ${maxChunks} chunks (was ${chunks.length})`)
+    chunks = chunks.slice(0, maxChunks)
+  }
+
+  const totalChunks = chunks.length
 
   onProgress?.({
     stage: 'chunking',
     current: 0,
-    total: chunks.length,
-    message: `Split document into ${chunks.length} chunks`
+    total: totalChunks,
+    message: `Split document into ${totalChunks} chunks`
   })
 
-  // Process chunks (sequentially to avoid rate limits, but faster than before)
+  // Process chunks in parallel batches
   const extractions: ChunkExtraction[] = []
 
-  for (let i = 0; i < chunks.length; i++) {
+  for (let batchStart = 0; batchStart < chunks.length; batchStart += parallelBatchSize) {
+    const batchEnd = Math.min(batchStart + parallelBatchSize, chunks.length)
+    const batchChunks = chunks.slice(batchStart, batchEnd)
+
     onProgress?.({
       stage: 'extracting',
-      current: i + 1,
-      total: chunks.length,
-      message: `Extracting entities from chunk ${i + 1}/${chunks.length}`
+      current: batchStart + 1,
+      total: totalChunks,
+      message: `Extracting entities from chunks ${batchStart + 1}-${batchEnd}/${totalChunks}`
     })
 
-    try {
-      const extraction = await extractFromChunk(chunks[i], i, chunks.length, language)
-      extractions.push(extraction)
-    } catch (error) {
-      console.error(`[Extraction] Failed to process chunk ${i + 1}:`, error)
-      extractions.push({ entities: [], relationships: [] })
-    }
+    // Process batch in parallel
+    const batchPromises = batchChunks.map(async (chunk, idx) => {
+      const chunkIndex = batchStart + idx
+      try {
+        const extraction = await extractFromChunk(chunk, chunkIndex, totalChunks, language, aggressiveness)
+
+        // Filter entities by confidence threshold
+        extraction.entities = extraction.entities.filter(e => e.confidence >= confidenceThreshold)
+
+        // Optionally skip relationship extraction
+        if (!enableRelationships) {
+          extraction.relationships = []
+        }
+
+        return extraction
+      } catch (error) {
+        console.error(`[Extraction] Failed to process chunk ${chunkIndex + 1}:`, error)
+        return { entities: [], relationships: [] }
+      }
+    })
+
+    const batchResults = await Promise.all(batchPromises)
+    extractions.push(...batchResults)
   }
 
   // Merge and deduplicate
