@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
 import { MarkdownRenderer } from '@/components/editor/markdown-renderer'
+import { EntityDetailActions } from '@/components/entities/entity-detail-actions'
 import {
   Edit,
   Lock,
@@ -173,14 +174,11 @@ export default async function EntityViewPage({
                 )}
               </div>
               {isDM && (
-                <div className="flex gap-2">
-                  <Link href={`/campaigns/${params.campaignId}/entities/${params.entityId}/edit`}>
-                    <Button size="sm">
-                      <Edit className="h-4 w-4 mr-1" />
-                      Edit
-                    </Button>
-                  </Link>
-                </div>
+                <EntityDetailActions
+                  entityId={params.entityId}
+                  entityName={entity.name}
+                  campaignId={params.campaignId}
+                />
               )}
             </div>
             <p className="text-sm text-muted-foreground">

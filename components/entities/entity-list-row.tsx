@@ -1,3 +1,5 @@
+'use client'
+
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { Entity } from '@/lib/db/schema'
@@ -8,10 +10,12 @@ import {
   getEntityTypeBadgeClasses,
   getEntityTypeLabel,
 } from '@/lib/entity-colors'
+import { EntityActions } from './entity-actions'
 
 interface EntityListRowProps {
   entity: Entity
   campaignId: string
+  isDM?: boolean
 }
 
 function formatTimeAgo(date: Date): string {
@@ -32,13 +36,17 @@ function formatTimeAgo(date: Date): string {
   }
 }
 
-export function EntityListRow({ entity, campaignId }: EntityListRowProps) {
+export function EntityListRow({ entity, campaignId, isDM = false }: EntityListRowProps) {
   const Icon = getEntityTypeIcon(entity.entityType)
   const typeClasses = getEntityTypeBadgeClasses(entity.entityType)
 
   return (
-    <Link href={`/campaigns/${campaignId}/entities/${entity.id}`}>
-      <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-transparent hover:border-border hover:bg-accent/50 transition-colors cursor-pointer group">
+    <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-transparent hover:border-border hover:bg-accent/50 transition-colors group">
+      {/* Clickable area for navigation */}
+      <Link
+        href={`/campaigns/${campaignId}/entities/${entity.id}`}
+        className="flex items-center gap-3 flex-1 min-w-0"
+      >
         {/* Icon + Name */}
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -68,7 +76,17 @@ export function EntityListRow({ entity, campaignId }: EntityListRowProps) {
         <span className="text-xs text-muted-foreground shrink-0 w-16 text-right">
           {formatTimeAgo(new Date(entity.updatedAt))}
         </span>
+      </Link>
+
+      {/* Actions dropdown */}
+      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+        <EntityActions
+          entityId={entity.id}
+          entityName={entity.name}
+          campaignId={campaignId}
+          isDM={isDM}
+        />
       </div>
-    </Link>
+    </div>
   )
 }

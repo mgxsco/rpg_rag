@@ -169,6 +169,7 @@ export default async function EntitiesPage({
                   key={entity.id}
                   entity={entity}
                   campaignId={campaignId}
+                  isDM={isDM}
                 />
               ))}
             </div>
@@ -180,6 +181,7 @@ export default async function EntitiesPage({
                   key={entity.id}
                   entity={entity}
                   campaignId={campaignId}
+                  isDM={isDM}
                 />
               ))}
             </div>
