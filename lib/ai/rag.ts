@@ -44,9 +44,9 @@ export async function searchSimilarChunks(
       return []
     }
 
-    // Generate embedding for query
+    // Generate embedding for query (use retrieval.query task for better matching)
     console.log('[RAG] Generating embedding for query...')
-    const queryEmbedding = await generateEmbedding(query)
+    const queryEmbedding = await generateEmbedding(query, 'retrieval.query')
     console.log('[RAG] Query embedding generated, dimensions:', queryEmbedding.length)
 
     const embeddingStr = `[${queryEmbedding.join(',')}]`
