@@ -147,7 +147,7 @@ export function InviteModal({ campaignId, isOpen, onClose }: InviteModalProps) {
           <div className="space-y-4 p-4 rounded-sm border-2 border-dashed border-border bg-muted/30">
             <h4 className="font-medium">Create New Invite</h4>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-2">
                 <Label>Role</Label>
                 <Select value={role} onValueChange={(v) => setRole(v as 'player' | 'viewer')}>

@@ -4,6 +4,7 @@ import { db, campaigns, campaignMembers } from '@/lib/db'
 import { eq, and } from 'drizzle-orm'
 import { generateChatResponse } from '@/lib/ai/chat'
 import { ChatMessage } from '@/lib/types'
+import { getCampaignSettings } from '@/lib/campaign-settings'
 
 export async function POST(
   request: Request,
@@ -45,6 +46,17 @@ export async function POST(
 
   const isDM = membership?.role === 'dm' || campaign.ownerId === session.user.id
 
+  // Get campaign settings
+  const settings = getCampaignSettings(campaign.settings)
+
+  // Check if player chat is enabled (for non-DMs)
+  if (!isDM && !settings.search.enablePlayerChat) {
+    return NextResponse.json({
+      content: 'AI Chat is currently disabled for players. The Dungeon Master can enable it in campaign settings.',
+      sources: [],
+    })
+  }
+
   const body = await request.json()
   const { message, history } = body as {
     message: string
@@ -63,6 +75,7 @@ export async function POST(
       {
         isDM,
         campaignName: campaign.name,
+        settings: campaign.settings,
       }
     )
 

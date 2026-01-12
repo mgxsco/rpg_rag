@@ -167,11 +167,11 @@ export default function GraphPage() {
   } : null
 
   return (
-    <div className="flex gap-6">
+    <div className="flex flex-col md:flex-row gap-6">
       <CampaignSidebar campaignId={campaignId} isDM={isDM} />
 
       <div className="flex-1">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-bold">Knowledge Graph</h1>
             {stats && (
@@ -222,18 +222,20 @@ export default function GraphPage() {
         <Card className="overflow-hidden">
           <CardContent className="p-0">
             {loading ? (
-              <div className="h-[600px] flex items-center justify-center">
+              <div className="h-[calc(100vh-280px)] md:h-[600px] flex items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             ) : filteredData && filteredData.nodes.length > 0 ? (
-              <KnowledgeGraph
-                data={filteredData}
-                onNodeClick={handleNodeClick}
-                onNodeDoubleClick={handleNodeDoubleClick}
-                centerId={centerId}
-              />
+              <div className="h-[calc(100vh-280px)] md:h-[600px]">
+                <KnowledgeGraph
+                  data={filteredData}
+                  onNodeClick={handleNodeClick}
+                  onNodeDoubleClick={handleNodeDoubleClick}
+                  centerId={centerId}
+                />
+              </div>
             ) : (
-              <div className="h-[600px] flex items-center justify-center text-muted-foreground">
+              <div className="h-[calc(100vh-280px)] md:h-[600px] flex items-center justify-center text-muted-foreground">
                 <div className="text-center">
                   <p className="text-lg font-medium mb-2">No entities yet</p>
                   <p className="text-sm">

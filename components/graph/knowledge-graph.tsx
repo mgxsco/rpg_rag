@@ -105,12 +105,16 @@ export function KnowledgeGraph({
       if (container) {
         setDimensions({
           width: container.clientWidth,
-          height: 600,
+          height: container.clientHeight || 600,
         })
       }
     }
 
+    // Initial update
     updateDimensions()
+    // Delayed update to catch any layout shifts
+    setTimeout(updateDimensions, 100)
+
     window.addEventListener('resize', updateDimensions)
     return () => window.removeEventListener('resize', updateDimensions)
   }, [])
@@ -280,7 +284,7 @@ export function KnowledgeGraph({
   }), [data])
 
   return (
-    <div id="knowledge-graph-container" className="w-full h-[600px] bg-[#2a2318] relative border-2 border-[hsl(30_25%_30%)]">
+    <div id="knowledge-graph-container" className="w-full h-full bg-[#2a2318] relative border-2 border-[hsl(30_25%_30%)]">
       <ForceGraph2D
         ref={graphRef}
         graphData={graphData}

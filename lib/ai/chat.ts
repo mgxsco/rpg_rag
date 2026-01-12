@@ -1,6 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { searchSimilarChunks, buildContext } from './rag'
 import { ChatMessage, SearchResult } from '@/lib/types'
+import { getCampaignSettings, DEFAULT_SETTINGS } from '@/lib/campaign-settings'
+import type { CampaignSettings } from '@/lib/db/schema'
 
 // Lazy-initialize Anthropic client to avoid build errors
 let anthropicClient: Anthropic | null = null
@@ -17,19 +19,21 @@ function getAnthropic(): Anthropic {
   return anthropicClient
 }
 
-const SYSTEM_PROMPT = `You are a helpful D&D campaign assistant. Your role is to answer questions about the campaign based on the provided context from campaign notes.
+const SYSTEM_PROMPT = `You are a helpful D&D campaign assistant. Your role is to answer questions about the campaign based on the provided context from the campaign knowledge base.
 
 Guidelines:
 - Answer questions based ONLY on the provided context
-- If the answer isn't in the context, say you don't have that information in the campaign notes
+- If the answer isn't in the context, say you don't have that information in the campaign knowledge base
 - Be concise but thorough
-- When referencing information, mention which source it came from
+- When referencing information, mention which source it came from (entity name and type)
 - Stay in character as a helpful campaign assistant
-- If asked about rules or mechanics not in the notes, you can provide general D&D knowledge but clarify it's not from the campaign notes`
+- If asked about rules or mechanics not in the knowledge base, you can provide general D&D knowledge but clarify it's not from the campaign
+- Use wikilinks [[Entity Name]] when referring to entities that exist in the campaign`
 
 export interface ChatOptions {
   isDM: boolean
   campaignName?: string
+  settings?: CampaignSettings | null
 }
 
 export interface ChatResponse {
@@ -54,9 +58,13 @@ export async function generateChatResponse(
     }
   }
 
-  // Search for relevant chunks
+  // Get campaign settings with defaults
+  const settings = getCampaignSettings(options.settings)
+
+  // Search for relevant chunks using campaign settings
   const chunks = await searchSimilarChunks(campaignId, userMessage, {
-    limit: 8,
+    limit: settings.search.resultLimit,
+    threshold: settings.search.similarityThreshold,
     excludeDmOnly: !options.isDM,
   })
 
@@ -68,7 +76,7 @@ export async function generateChatResponse(
 
 Campaign: ${options.campaignName || 'Unknown Campaign'}
 
-Context from campaign notes:
+Context from campaign knowledge base:
 ${context}`
 
   // Prepare messages for Claude

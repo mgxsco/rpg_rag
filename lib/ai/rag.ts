@@ -9,7 +9,7 @@ export interface SearchOptions {
 }
 
 /**
- * Search for similar content using vector search
+ * Search for similar content using vector search on entity chunks
  */
 export async function searchSimilarChunks(
   campaignId: string,
@@ -33,14 +33,14 @@ export async function searchSimilarChunks(
   } = options
 
   try {
-    // First check if there are any embeddings for this campaign
+    // First check if there are any chunks for this campaign
     const countResult = await sql`
-      SELECT COUNT(*) as count FROM note_embeddings WHERE campaign_id = ${campaignId}
+      SELECT COUNT(*) as count FROM chunks WHERE campaign_id = ${campaignId}
     `
-    console.log('[RAG] Total embeddings in campaign:', countResult.rows[0]?.count)
+    console.log('[RAG] Total chunks in campaign:', countResult.rows[0]?.count)
 
     if (countResult.rows[0]?.count === '0' || countResult.rows[0]?.count === 0) {
-      console.log('[RAG] No embeddings found for this campaign. Run reindex first.')
+      console.log('[RAG] No chunks found for this campaign. Upload documents to extract entities.')
       return []
     }
 
@@ -51,41 +51,45 @@ export async function searchSimilarChunks(
 
     const embeddingStr = `[${queryEmbedding.join(',')}]`
 
-    // Raw SQL query for vector similarity search
+    // Vector similarity search on chunks table joined with entities
     console.log('[RAG] Running vector search with threshold:', threshold)
     const result = await sql`
       SELECT
-        n.id as note_id,
-        n.title as note_title,
-        n.slug as note_slug,
-        n.note_type,
-        e.chunk_text,
-        1 - (e.embedding <=> ${embeddingStr}::vector) as similarity
-      FROM note_embeddings e
-      JOIN notes n ON n.id = e.note_id
-      WHERE e.campaign_id = ${campaignId}
-        AND (${!excludeDmOnly} OR n.is_dm_only = false)
-        AND 1 - (e.embedding <=> ${embeddingStr}::vector) > ${threshold}
-      ORDER BY e.embedding <=> ${embeddingStr}::vector
+        e.id as entity_id,
+        e.name as entity_name,
+        e.entity_type,
+        c.content as chunk_text,
+        1 - (c.embedding <=> ${embeddingStr}::vector) as similarity
+      FROM chunks c
+      JOIN entities e ON e.id = c.entity_id
+      WHERE c.campaign_id = ${campaignId}
+        AND c.embedding IS NOT NULL
+        AND (${!excludeDmOnly} OR e.is_dm_only = false)
+        AND 1 - (c.embedding <=> ${embeddingStr}::vector) > ${threshold}
+      ORDER BY c.embedding <=> ${embeddingStr}::vector
       LIMIT ${limit}
     `
 
     console.log('[RAG] Search results found:', result.rows?.length || 0)
     if (result.rows && result.rows.length > 0) {
       console.log('[RAG] Top result:', {
-        title: result.rows[0].note_title,
+        name: result.rows[0].entity_name,
+        type: result.rows[0].entity_type,
         similarity: result.rows[0].similarity,
         preview: result.rows[0].chunk_text?.substring(0, 100)
       })
     }
 
     return (result.rows || []).map((row: any) => ({
-      note_id: row.note_id,
-      note_title: row.note_title,
-      note_slug: row.note_slug,
-      note_type: row.note_type,
+      entity_id: row.entity_id,
+      entity_name: row.entity_name,
+      entity_type: row.entity_type,
       chunk_text: row.chunk_text,
       similarity: row.similarity,
+      // Legacy aliases for backward compatibility
+      note_id: row.entity_id,
+      note_title: row.entity_name,
+      note_type: row.entity_type,
     }))
   } catch (error) {
     console.error('[RAG] Vector search error:', error)
@@ -100,11 +104,15 @@ export function buildContext(results: SearchResult[]): string {
   console.log('[RAG] Building context from', results.length, 'results')
 
   if (results.length === 0) {
-    return 'No relevant information found in the campaign notes.'
+    return 'No relevant information found in the campaign knowledge base.'
   }
 
   const context = results
-    .map((r, i) => `[Source ${i + 1}: ${r.note_title} (${r.note_type})]\n${r.chunk_text}`)
+    .map((r, i) => {
+      const name = r.entity_name || r.note_title || 'Unknown'
+      const type = r.entity_type || r.note_type || 'unknown'
+      return `[Source ${i + 1}: ${name} (${type})]\n${r.chunk_text}`
+    })
     .join('\n\n---\n\n')
 
   console.log('[RAG] Context length:', context.length, 'characters')

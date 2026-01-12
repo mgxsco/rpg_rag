@@ -92,11 +92,11 @@ export default async function EntitiesPage({
   }
 
   return (
-    <div className="flex gap-6">
+    <div className="flex flex-col md:flex-row gap-6">
       <CampaignSidebar campaignId={campaignId} isDM={isDM} />
 
       <div className="flex-1">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-bold">Wiki</h1>
             <p className="text-muted-foreground">
@@ -105,22 +105,22 @@ export default async function EntitiesPage({
           </div>
           <div className="flex gap-2">
             <Link href={`/campaigns/${campaignId}/entities/upload`}>
-              <Button variant="outline">
-                <Upload className="h-4 w-4 mr-2" />
-                Upload Document
+              <Button variant="outline" size="sm" className="sm:size-default">
+                <Upload className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Upload Document</span>
               </Button>
             </Link>
             <Link href={`/campaigns/${campaignId}/entities/new`}>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                New Entity
+              <Button size="sm" className="sm:size-default">
+                <Plus className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">New Entity</span>
               </Button>
             </Link>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-4 mb-6">
-          <form className="flex-1 min-w-[200px]">
+        <div className="flex flex-col sm:flex-row flex-wrap gap-4 mb-6">
+          <form className="flex-1 w-full sm:w-auto sm:min-w-[200px]">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -171,7 +171,7 @@ export default async function EntitiesPage({
             </p>
           </div>
         ) : allEntities.length > 0 ? (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {allEntities.map((entity) => (
               <EntityCard
                 key={entity.id}

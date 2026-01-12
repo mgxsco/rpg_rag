@@ -13,12 +13,17 @@ export type {
 
 // Additional types for API/UI
 export interface SearchResult {
-  note_id: string
-  note_title: string
-  note_slug: string
-  note_type: string
+  // Entity-based fields (new system)
+  entity_id: string
+  entity_name: string
+  entity_type: string
   chunk_text: string
   similarity: number
+  // Legacy aliases for backward compatibility
+  note_id?: string
+  note_title?: string
+  note_slug?: string
+  note_type?: string
 }
 
 export interface ChatMessage {

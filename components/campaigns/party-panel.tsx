@@ -106,7 +106,7 @@ function MemberCard({
   return (
     <div
       className={cn(
-        'relative flex flex-col items-center p-3 rounded-sm border-2 bg-gradient-to-b from-card to-[hsl(35_25%_88%)] min-w-[90px]',
+        'relative flex flex-col items-center p-3 rounded-sm border-2 bg-gradient-to-b from-card to-[hsl(35_25%_88%)] min-w-[90px] shrink-0',
         isOwner && 'border-[hsl(45_80%_45%)] shadow-md',
         !isOwner && 'border-border'
       )}
@@ -242,7 +242,7 @@ export function PartyPanel({
         </div>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex overflow-x-auto md:flex-wrap gap-3 pb-2 -mx-2 px-2 scrollbar-hide scroll-touch">
           {sortedMembers.map((member) => (
             <MemberCard
               key={member.userId}

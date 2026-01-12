@@ -160,8 +160,8 @@ export default function CampaignHomePage() {
 
   if (loading) {
     return (
-      <div className="flex gap-6">
-        <div className="w-64 shrink-0" />
+      <div className="flex flex-col md:flex-row gap-6">
+        <div className="hidden md:block w-64 shrink-0" />
         <div className="flex-1 flex items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
@@ -171,8 +171,8 @@ export default function CampaignHomePage() {
 
   if (!campaign) {
     return (
-      <div className="flex gap-6">
-        <div className="w-64 shrink-0" />
+      <div className="flex flex-col md:flex-row gap-6">
+        <div className="hidden md:block w-64 shrink-0" />
         <div className="flex-1 text-center py-20">
           <p className="text-muted-foreground">Campaign not found</p>
         </div>
@@ -208,16 +208,16 @@ export default function CampaignHomePage() {
   const currentUserId = campaign.currentUserId
 
   return (
-    <div className="flex gap-6">
+    <div className="flex flex-col md:flex-row gap-6">
       <CampaignSidebar campaignId={campaignId} isDM={isDM} />
 
       <div className="flex-1 space-y-6">
         {/* Campaign Header */}
         <div className="relative">
-          <div className="flex items-start justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div>
-              <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-3xl font-bold" style={{ fontFamily: 'Cinzel, serif' }}>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
+                <h1 className="text-2xl sm:text-3xl font-bold" style={{ fontFamily: 'Cinzel, serif' }}>
                   {campaign.name}
                 </h1>
                 <Badge variant={isDM ? 'default' : 'secondary'} className="flex items-center gap-1">
@@ -228,7 +228,7 @@ export default function CampaignHomePage() {
               {campaign.description && (
                 <p className="text-muted-foreground mb-3">{campaign.description}</p>
               )}
-              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1">
                   <Globe className="h-4 w-4" />
                   {campaign.language === 'en' ? 'English' : campaign.language === 'pt-BR' ? 'Português (BR)' : campaign.language}
@@ -264,7 +264,7 @@ export default function CampaignHomePage() {
         />
 
         {/* Stats Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           <StatCard
             icon={<BookOpen className="h-5 w-5" />}
             label="Wiki Entries"
@@ -292,7 +292,7 @@ export default function CampaignHomePage() {
         </div>
 
         {/* Two Column Layout */}
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Left Column */}
           <div className="space-y-6">
             {/* Quick Actions */}

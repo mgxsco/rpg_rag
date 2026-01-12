@@ -78,7 +78,7 @@ export default function ChatPage({
 
   if (loading) {
     return (
-      <div className="flex gap-6">
+      <div className="flex flex-col md:flex-row gap-6">
         <CampaignSidebar campaignId={params.campaignId} isDM={false} />
         <div className="flex-1 flex items-center justify-center">
           <p className="text-muted-foreground">Loading...</p>
@@ -88,13 +88,13 @@ export default function ChatPage({
   }
 
   return (
-    <div className="flex gap-6">
+    <div className="flex flex-col md:flex-row gap-6">
       <CampaignSidebar campaignId={params.campaignId} isDM={isDM} />
 
       <div className="flex-1">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold">Campaign AI Assistant</h1>
-          <p className="text-muted-foreground">
+        <div className="mb-4 md:mb-6">
+          <h1 className="text-xl md:text-2xl font-bold">Campaign AI Assistant</h1>
+          <p className="text-sm md:text-base text-muted-foreground">
             Ask questions about your campaign. The AI will search through your notes to find answers.
           </p>
         </div>

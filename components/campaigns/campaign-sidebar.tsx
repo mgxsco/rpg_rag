@@ -55,7 +55,7 @@ export function CampaignSidebar({ campaignId, isDM }: CampaignSidebarProps) {
   ]
 
   return (
-    <aside className="w-64 shrink-0">
+    <aside className="hidden md:block w-64 shrink-0">
       <div className="sticky top-24 space-y-4 p-4 rounded-sm border-2 border-border bg-gradient-to-b from-card to-[hsl(35_25%_88%)] shadow-lg relative">
         {/* Decorative corner ornaments */}
         <div className="absolute top-1 left-1 w-3 h-3 border-t-2 border-l-2 border-[hsl(45_80%_45%)] opacity-60" />

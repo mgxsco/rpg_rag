@@ -211,7 +211,7 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="flex gap-6">
+      <div className="flex flex-col md:flex-row gap-6">
         <CampaignSidebar campaignId={campaignId} isDM={true} />
         <div className="flex-1 flex items-center justify-center">
           <p className="text-muted-foreground">Loading...</p>
@@ -221,20 +221,20 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="flex gap-6">
+    <div className="flex flex-col md:flex-row gap-6">
       <CampaignSidebar campaignId={campaignId} isDM={true} />
 
       <div className="flex-1 max-w-3xl">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold">Campaign Settings</h1>
-          <Button onClick={handleSave} disabled={saving}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <h1 className="text-xl sm:text-2xl font-bold">Campaign Settings</h1>
+          <Button onClick={handleSave} disabled={saving} size="sm" className="sm:size-default">
             <Save className="h-4 w-4 mr-2" />
             {saving ? 'Saving...' : 'Save All'}
           </Button>
         </div>
 
         <Tabs defaultValue="general" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="w-full overflow-x-auto flex sm:grid sm:grid-cols-5 scrollbar-hide">
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="extraction">Extraction</TabsTrigger>
             <TabsTrigger value="search">Search</TabsTrigger>
@@ -308,7 +308,7 @@ export default function SettingsPage() {
                 {/* Aggressiveness */}
                 <div className="space-y-3">
                   <Label>Extraction Aggressiveness</Label>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {AGGRESSIVENESS_OPTIONS.map((option) => (
                       <button
                         key={option.value}
