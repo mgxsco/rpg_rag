@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -56,11 +56,9 @@ interface Campaign {
   settings: CampaignSettings | null
 }
 
-export default function SettingsPage({
-  params,
-}: {
-  params: { campaignId: string }
-}) {
+export default function SettingsPage() {
+  const params = useParams<{ campaignId: string }>()
+  const campaignId = params.campaignId
   const [campaign, setCampaign] = useState<Campaign | null>(null)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -76,7 +74,7 @@ export default function SettingsPage({
 
   useEffect(() => {
     const loadData = async () => {
-      const res = await fetch(`/api/campaigns/${params.campaignId}`)
+      const res = await fetch(`/api/campaigns/${campaignId}`)
       if (res.ok) {
         const data = await res.json()
         setCampaign(data)
@@ -89,7 +87,7 @@ export default function SettingsPage({
     }
 
     loadData()
-  }, [params.campaignId])
+  }, [campaignId])
 
   const updateExtractionSetting = <K extends keyof typeof settings.extraction>(
     key: K,
@@ -134,7 +132,7 @@ export default function SettingsPage({
   const handleSave = async () => {
     setSaving(true)
 
-    const res = await fetch(`/api/campaigns/${params.campaignId}`, {
+    const res = await fetch(`/api/campaigns/${campaignId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, description, language, settings }),
@@ -161,7 +159,7 @@ export default function SettingsPage({
     setReindexing(true)
 
     try {
-      const res = await fetch(`/api/campaigns/${params.campaignId}/reindex`, {
+      const res = await fetch(`/api/campaigns/${campaignId}/reindex`, {
         method: 'POST',
       })
 
@@ -191,7 +189,7 @@ export default function SettingsPage({
   }
 
   const handleDelete = async () => {
-    const res = await fetch(`/api/campaigns/${params.campaignId}`, {
+    const res = await fetch(`/api/campaigns/${campaignId}`, {
       method: 'DELETE',
     })
 
@@ -214,7 +212,7 @@ export default function SettingsPage({
   if (loading) {
     return (
       <div className="flex gap-6">
-        <CampaignSidebar campaignId={params.campaignId} isDM={true} />
+        <CampaignSidebar campaignId={campaignId} isDM={true} />
         <div className="flex-1 flex items-center justify-center">
           <p className="text-muted-foreground">Loading...</p>
         </div>
@@ -224,7 +222,7 @@ export default function SettingsPage({
 
   return (
     <div className="flex gap-6">
-      <CampaignSidebar campaignId={params.campaignId} isDM={true} />
+      <CampaignSidebar campaignId={campaignId} isDM={true} />
 
       <div className="flex-1 max-w-3xl">
         <div className="flex items-center justify-between mb-6">
