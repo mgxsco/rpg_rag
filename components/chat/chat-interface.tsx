@@ -7,11 +7,13 @@ import { Card, CardContent } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ChatMessageComponent } from './chat-message'
 import { ChatMessage } from '@/lib/types'
-import { Send, Trash2, Loader2 } from 'lucide-react'
+import { Send, Trash2, Loader2, BookOpen, Sparkles } from 'lucide-react'
+
+export type ChatMode = 'rag' | 'direct'
 
 interface ChatInterfaceProps {
   messages: ChatMessage[]
-  onSendMessage: (content: string) => Promise<void>
+  onSendMessage: (content: string, mode: ChatMode) => Promise<void>
   onClearHistory: () => void
   campaignId: string
 }
@@ -24,6 +26,7 @@ export function ChatInterface({
 }: ChatInterfaceProps) {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [mode, setMode] = useState<ChatMode>('rag')
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -42,7 +45,7 @@ export function ChatInterface({
     setSending(true)
 
     try {
-      await onSendMessage(message)
+      await onSendMessage(message, mode)
     } finally {
       setSending(false)
     }
@@ -109,12 +112,43 @@ export function ChatInterface({
         </ScrollArea>
 
         <form onSubmit={handleSubmit} className="mt-4">
+          {/* Mode Toggle */}
+          <div className="flex items-center gap-1 mb-3 p-1 bg-muted/50 rounded-lg w-fit">
+            <button
+              type="button"
+              onClick={() => setMode('rag')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                mode === 'rag'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <BookOpen className="h-4 w-4" />
+              <span>Knowledge Base</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('direct')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                mode === 'direct'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Sparkles className="h-4 w-4" />
+              <span>D&D Expert</span>
+            </button>
+          </div>
+
           <div className="flex gap-2">
             <Textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask a question about your campaign..."
+              placeholder={mode === 'rag'
+                ? "Ask about your campaign..."
+                : "Ask about D&D rules, lore, or mechanics..."
+              }
               className="min-h-[60px] resize-none"
               disabled={sending}
             />
@@ -127,7 +161,10 @@ export function ChatInterface({
             </Button>
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            Press Enter to send, Shift+Enter for new line
+            {mode === 'rag'
+              ? 'Searches your campaign wiki for answers'
+              : 'General D&D knowledge without campaign context'
+            }
           </p>
         </form>
       </CardContent>

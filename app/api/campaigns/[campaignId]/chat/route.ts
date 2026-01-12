@@ -58,9 +58,10 @@ export async function POST(
   }
 
   const body = await request.json()
-  const { message, history } = body as {
+  const { message, history, mode = 'rag' } = body as {
     message: string
     history: ChatMessage[]
+    mode?: 'rag' | 'direct'
   }
 
   if (!message) {
@@ -76,6 +77,7 @@ export async function POST(
         isDM,
         campaignName: campaign.name,
         settings: campaign.settings,
+        mode,
       }
     )
 

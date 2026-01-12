@@ -19,7 +19,7 @@ function getAnthropic(): Anthropic {
   return anthropicClient
 }
 
-const SYSTEM_PROMPT = `You are a helpful D&D campaign assistant. Your role is to answer questions about the campaign based on the provided context from the campaign knowledge base.
+const RAG_SYSTEM_PROMPT = `You are a helpful D&D campaign assistant. Your role is to answer questions about the campaign based on the provided context from the campaign knowledge base.
 
 Guidelines:
 - Answer questions based ONLY on the provided context
@@ -30,10 +30,20 @@ Guidelines:
 - If asked about rules or mechanics not in the knowledge base, you can provide general D&D knowledge but clarify it's not from the campaign
 - Use wikilinks [[Entity Name]] when referring to entities that exist in the campaign`
 
+const DIRECT_SYSTEM_PROMPT = `You are a helpful D&D assistant and expert game master. You have extensive knowledge of D&D 5th Edition rules, lore, creatures, spells, items, and game mechanics.
+
+Guidelines:
+- Answer questions about D&D rules, mechanics, and lore
+- Provide helpful suggestions for running or playing D&D
+- Help with character creation, encounter balancing, and storytelling
+- Be concise but thorough
+- If asked about specific campaign details, explain that you need to use the "Knowledge Base" mode to search through campaign notes`
+
 export interface ChatOptions {
   isDM: boolean
   campaignName?: string
   settings?: CampaignSettings | null
+  mode?: 'rag' | 'direct'
 }
 
 export interface ChatResponse {
@@ -60,24 +70,35 @@ export async function generateChatResponse(
 
   // Get campaign settings with defaults
   const settings = getCampaignSettings(options.settings)
+  const mode = options.mode || 'rag'
 
-  // Search for relevant chunks using campaign settings
-  const chunks = await searchSimilarChunks(campaignId, userMessage, {
-    limit: settings.search.resultLimit,
-    threshold: settings.search.similarityThreshold,
-    excludeDmOnly: !options.isDM,
-  })
+  let chunks: SearchResult[] = []
+  let systemPrompt: string
 
-  // Build context from chunks
-  const context = buildContext(chunks)
+  if (mode === 'rag') {
+    // Search for relevant chunks using campaign settings
+    chunks = await searchSimilarChunks(campaignId, userMessage, {
+      limit: settings.search.resultLimit,
+      threshold: settings.search.similarityThreshold,
+      excludeDmOnly: !options.isDM,
+    })
 
-  // Build the system prompt with context
-  const systemPrompt = `${SYSTEM_PROMPT}
+    // Build context from chunks
+    const context = buildContext(chunks)
+
+    // Build the system prompt with context
+    systemPrompt = `${RAG_SYSTEM_PROMPT}
 
 Campaign: ${options.campaignName || 'Unknown Campaign'}
 
 Context from campaign knowledge base:
 ${context}`
+  } else {
+    // Direct mode - no RAG, just general D&D knowledge
+    systemPrompt = `${DIRECT_SYSTEM_PROMPT}
+
+Campaign: ${options.campaignName || 'Unknown Campaign'}`
+  }
 
   // Prepare messages for Claude
   const messages: Anthropic.MessageParam[] = [

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
-import { ChatInterface } from '@/components/chat/chat-interface'
+import { ChatInterface, ChatMode } from '@/components/chat/chat-interface'
 import { ChatMessage } from '@/lib/types'
 
 export default function ChatPage({
@@ -35,7 +35,7 @@ export default function ChatPage({
     loadCampaignData()
   }, [params.campaignId, session])
 
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async (content: string, mode: ChatMode = 'rag') => {
     const userMessage: ChatMessage = { role: 'user', content }
     setMessages((prev) => [...prev, userMessage])
 
@@ -46,6 +46,7 @@ export default function ChatPage({
         body: JSON.stringify({
           message: content,
           history: messages,
+          mode,
         }),
       })
 
