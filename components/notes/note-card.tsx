@@ -3,6 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Note } from '@/lib/types'
 import { Lock } from 'lucide-react'
+import {
+  getEntityTypeBadgeClasses,
+  getEntityTypeLabel,
+} from '@/lib/entity-colors'
 
 interface NoteCardProps {
   note: Note
@@ -16,6 +20,8 @@ export function NoteCard({ note, campaignId }: NoteCardProps) {
     .slice(0, 150)
     .trim()
 
+  const typeClasses = getEntityTypeBadgeClasses(note.noteType)
+
   return (
     <Link href={`/campaigns/${campaignId}/notes/${note.slug}`}>
       <Card className="hover:border-primary transition-colors cursor-pointer h-full">
@@ -27,8 +33,8 @@ export function NoteCard({ note, campaignId }: NoteCardProps) {
             )}
           </div>
           <div className="flex flex-wrap gap-1">
-            <Badge variant="outline" className={`note-type-${note.noteType}`}>
-              {note.noteType.replace('_', ' ')}
+            <Badge variant="outline" className={typeClasses}>
+              {getEntityTypeLabel(note.noteType)}
             </Badge>
             {note.tags?.slice(0, 2).map((tag) => (
               <Badge key={tag} variant="secondary" className="text-xs">

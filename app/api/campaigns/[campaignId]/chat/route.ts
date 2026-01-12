@@ -52,7 +52,7 @@ export async function POST(
   // Check if player chat is enabled (for non-DMs)
   if (!isDM && !settings.search.enablePlayerChat) {
     return NextResponse.json({
-      content: 'AI Chat is currently disabled for players. The Dungeon Master can enable it in campaign settings.',
+      content: 'The Oracle is currently unavailable for players. The Dungeon Master can enable it in campaign settings.',
       sources: [],
     })
   }

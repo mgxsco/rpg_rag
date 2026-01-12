@@ -2,40 +2,21 @@ import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Entity } from '@/lib/db/schema'
-import { Lock, User, MapPin, Sword, Scroll, Users, BookOpen, Crown } from 'lucide-react'
+import { Lock } from 'lucide-react'
+import {
+  getEntityTypeIcon,
+  getEntityTypeBadgeClasses,
+  getEntityTypeLabel,
+} from '@/lib/entity-colors'
 
 interface EntityCardProps {
   entity: Entity
   campaignId: string
 }
 
-const TYPE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  npc: User,
-  location: MapPin,
-  item: Sword,
-  quest: Scroll,
-  faction: Users,
-  lore: BookOpen,
-  session: BookOpen,
-  player_character: Crown,
-  freeform: BookOpen,
-}
-
-const TYPE_COLORS: Record<string, string> = {
-  npc: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-  location: 'bg-green-500/10 text-green-500 border-green-500/20',
-  item: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
-  quest: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
-  faction: 'bg-red-500/10 text-red-500 border-red-500/20',
-  lore: 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20',
-  session: 'bg-pink-500/10 text-pink-500 border-pink-500/20',
-  player_character: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-  freeform: 'bg-gray-500/10 text-gray-500 border-gray-500/20',
-}
-
 export function EntityCard({ entity, campaignId }: EntityCardProps) {
-  const Icon = TYPE_ICONS[entity.entityType] || BookOpen
-  const typeColor = TYPE_COLORS[entity.entityType] || TYPE_COLORS.freeform
+  const Icon = getEntityTypeIcon(entity.entityType)
+  const typeClasses = getEntityTypeBadgeClasses(entity.entityType)
 
   // Get first 150 chars of content for preview
   const preview = (entity.content || '')
@@ -57,8 +38,8 @@ export function EntityCard({ entity, campaignId }: EntityCardProps) {
             )}
           </div>
           <div className="flex flex-wrap gap-1">
-            <Badge variant="outline" className={typeColor}>
-              {entity.entityType.replace('_', ' ')}
+            <Badge variant="outline" className={typeClasses}>
+              {getEntityTypeLabel(entity.entityType)}
             </Badge>
             {entity.tags?.slice(0, 2).map((tag) => (
               <Badge key={tag} variant="secondary" className="text-xs">

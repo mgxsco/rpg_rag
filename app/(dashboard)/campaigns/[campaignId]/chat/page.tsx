@@ -104,9 +104,9 @@ export default function ChatPage({
 
       <div className="flex-1">
         <div className="mb-4 md:mb-6">
-          <h1 className="text-xl md:text-2xl font-bold">Campaign AI Assistant</h1>
+          <h1 className="text-xl md:text-2xl font-bold">Oracle</h1>
           <p className="text-sm md:text-base text-muted-foreground">
-            Ask questions about your campaign. The AI will search through your notes to find answers.
+            Consult the ancient wisdom trapped within the stone. Ask questions about your campaign.
           </p>
         </div>
 

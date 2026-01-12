@@ -2,6 +2,7 @@
 
 import { useRef, useCallback, useEffect, useState, useMemo } from 'react'
 import dynamic from 'next/dynamic'
+import { getEntityTypeColor } from '@/lib/entity-colors'
 
 // Dynamically import force graph to avoid SSR issues
 const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), {
@@ -37,52 +38,10 @@ interface KnowledgeGraphProps {
   centerId?: string | null
 }
 
-// Medieval/Fantasy color palette for entity types
-const ENTITY_TYPE_COLORS: Record<string, string> = {
-  // Characters - warm greens (forest/nature)
-  npc: '#4a7c59',           // Forest green
-  player_character: '#2d5a3d', // Dark forest
-  creature: '#6b8e4e',      // Moss green
-
-  // Places - warm amber/gold (torchlit maps)
-  location: '#c4883a',      // Warm amber
-  region: '#a67c3d',        // Antique gold
-
-  // Items - rich purples (magical)
-  item: '#7b5ea7',          // Royal purple
-  artifact: '#9b6bb5',      // Mystical violet
-  spell: '#8e6faf',         // Arcane purple
-  ability: '#a077bf',       // Light arcane
-
-  // Quests & Events - deep burgundy/crimson
-  quest: '#8b3a3a',         // Parchment red
-  event: '#a04545',         // Blood red
-
-  // Organizations - burnt orange/sienna
-  faction: '#b5651d',       // Burnt sienna
-  organization: '#cd7f32',  // Bronze
-
-  // Knowledge - deep blue (ink)
-  lore: '#4a5568',          // Ink gray
-  session: '#3d5a80',       // Scholar blue
-
-  // Divine/Racial - gold/teal
-  deity: '#d4a942',         // Divine gold
-  race: '#457b6d',          // Verdigris
-  class: '#5c7a5e',         // Sage green
-
-  // Conditions/Materials - earth tones
-  condition: '#8b4513',     // Saddle brown
-  material: '#6b5344',      // Umber
-}
-
-const FALLBACK_COLORS = ['#6b5344', '#5c5c5c', '#7a6a5a', '#4a5568', '#5a4a3a']
-
+// Use centralized entity colors for graph visualization
 function getTypeColor(type: string): string {
-  if (ENTITY_TYPE_COLORS[type]) return ENTITY_TYPE_COLORS[type]
-  // Generate consistent color based on type name hash
-  const hash = type.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
-  return FALLBACK_COLORS[hash % FALLBACK_COLORS.length]
+  const colors = getEntityTypeColor(type)
+  return colors.hex
 }
 
 export function KnowledgeGraph({

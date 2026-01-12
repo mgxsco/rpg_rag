@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { searchSimilarChunks, buildContext } from './rag'
 import { ChatMessage, SearchResult } from '@/lib/types'
-import { getCampaignSettings, DEFAULT_SETTINGS } from '@/lib/campaign-settings'
+import { getCampaignSettings, DEFAULT_SETTINGS, DEFAULT_PROMPTS } from '@/lib/campaign-settings'
 import type { CampaignSettings } from '@/lib/db/schema'
 
 // Lazy-initialize Anthropic client to avoid build errors
@@ -18,17 +18,6 @@ function getAnthropic(): Anthropic {
   }
   return anthropicClient
 }
-
-const SYSTEM_PROMPT = `You are a helpful D&D campaign assistant. Your role is to answer questions about the campaign based on the provided context from the campaign knowledge base.
-
-Guidelines:
-- Answer questions based ONLY on the provided context
-- If the answer isn't in the context, say you don't have that information in the campaign knowledge base
-- Be concise but thorough
-- When referencing information, mention which source it came from (entity name and type)
-- Stay in character as a helpful campaign assistant
-- If asked about rules or mechanics not in the knowledge base, you can provide general D&D knowledge but clarify it's not from the campaign
-- Use wikilinks [[Entity Name]] when referring to entities that exist in the campaign`
 
 export interface ChatOptions {
   isDM: boolean
@@ -71,8 +60,11 @@ export async function generateChatResponse(
   // Build context from chunks
   const context = buildContext(chunks)
 
+  // Get the custom or default system prompt
+  const baseSystemPrompt = settings.prompts.chatSystemPrompt || DEFAULT_PROMPTS.chatSystemPrompt
+
   // Build the system prompt with context
-  const systemPrompt = `${SYSTEM_PROMPT}
+  const systemPrompt = `${baseSystemPrompt}
 
 Campaign: ${options.campaignName || 'Unknown Campaign'}
 

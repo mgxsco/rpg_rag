@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useParams } from 'next/navigation'
-import { Home, BookOpen, Network, MessageSquare, Menu } from 'lucide-react'
+import { Home, BookOpen, ScrollText, MessageSquare, Menu } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function MobileTabBar() {
@@ -17,8 +17,8 @@ export function MobileTabBar() {
   const tabs = [
     { href: `/campaigns/${campaignId}`, icon: Home, label: 'Home', exact: true },
     { href: `/campaigns/${campaignId}/entities`, icon: BookOpen, label: 'Wiki' },
-    { href: `/campaigns/${campaignId}/graph`, icon: Network, label: 'Graph' },
-    { href: `/campaigns/${campaignId}/chat`, icon: MessageSquare, label: 'Chat' },
+    { href: `/campaigns/${campaignId}/notes`, icon: ScrollText, label: 'Notes' },
+    { href: `/campaigns/${campaignId}/chat`, icon: MessageSquare, label: 'Oracle' },
     { href: `/campaigns/${campaignId}/settings`, icon: Menu, label: 'More' },
   ]
 

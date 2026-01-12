@@ -28,8 +28,8 @@ import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
 import { useToast } from '@/components/ui/use-toast'
-import { Save, Trash2, RefreshCw, Loader2, Globe, Cog, Search, Network, AlertTriangle } from 'lucide-react'
-import { getCampaignSettings, DEFAULT_SETTINGS, AGGRESSIVENESS_OPTIONS, CHUNK_SIZE_OPTIONS, LINK_LABEL_OPTIONS } from '@/lib/campaign-settings'
+import { Save, Trash2, RefreshCw, Loader2, Globe, Cog, Search, Network, AlertTriangle, MessageSquare, RotateCcw } from 'lucide-react'
+import { getCampaignSettings, DEFAULT_SETTINGS, AGGRESSIVENESS_OPTIONS, CHUNK_SIZE_OPTIONS, LINK_LABEL_OPTIONS, DEFAULT_PROMPTS } from '@/lib/campaign-settings'
 import type { CampaignSettings } from '@/lib/db/schema'
 
 const LANGUAGES = [
@@ -127,6 +127,20 @@ export default function SettingsPage() {
       ...prev,
       visibility: { ...prev.visibility, [key]: value },
     }))
+  }
+
+  const updatePromptsSetting = <K extends keyof typeof settings.prompts>(
+    key: K,
+    value: typeof settings.prompts[K]
+  ) => {
+    setSettings((prev) => ({
+      ...prev,
+      prompts: { ...prev.prompts, [key]: value },
+    }))
+  }
+
+  const resetPromptToDefault = (key: keyof typeof DEFAULT_PROMPTS) => {
+    updatePromptsSetting(key, DEFAULT_PROMPTS[key])
   }
 
   const handleSave = async () => {
@@ -234,10 +248,11 @@ export default function SettingsPage() {
         </div>
 
         <Tabs defaultValue="general" className="space-y-6">
-          <TabsList className="w-full overflow-x-auto flex sm:grid sm:grid-cols-5 scrollbar-hide">
+          <TabsList className="w-full overflow-x-auto flex sm:grid sm:grid-cols-6 scrollbar-hide">
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="extraction">Extraction</TabsTrigger>
             <TabsTrigger value="search">Search</TabsTrigger>
+            <TabsTrigger value="prompts">Prompts</TabsTrigger>
             <TabsTrigger value="graph">Graph</TabsTrigger>
             <TabsTrigger value="danger">Danger</TabsTrigger>
           </TabsList>
@@ -500,6 +515,141 @@ export default function SettingsPage() {
                       )}
                       {reindexing ? 'Reindexing...' : 'Reindex'}
                     </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Prompts Tab */}
+          <TabsContent value="prompts">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MessageSquare className="h-5 w-5" />
+                  AI Prompt Customization
+                </CardTitle>
+                <CardDescription>
+                  Customize the prompts used by the AI for chat and entity extraction.
+                  Changes affect new interactions only.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Chat System Prompt */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="chatSystemPrompt">Chat System Prompt</Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => resetPromptToDefault('chatSystemPrompt')}
+                      title="Reset to default"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <Textarea
+                    id="chatSystemPrompt"
+                    value={settings.prompts.chatSystemPrompt}
+                    onChange={(e) => updatePromptsSetting('chatSystemPrompt', e.target.value)}
+                    rows={8}
+                    className="font-mono text-sm"
+                    placeholder="Enter the system prompt for the AI chat..."
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    This prompt instructs the AI how to respond to questions about your campaign.
+                  </p>
+                </div>
+
+                {/* Extraction Prompts - Accordion style */}
+                <div className="space-y-4 pt-4 border-t">
+                  <div>
+                    <Label className="text-base">Entity Extraction Prompts</Label>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      These prompts control how the AI extracts entities from uploaded documents.
+                      Each aggressiveness level has its own prompt.
+                    </p>
+                  </div>
+
+                  {/* Conservative Prompt */}
+                  <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="extractionConservativePrompt" className="font-medium">
+                        Conservative Mode Prompt
+                      </Label>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => resetPromptToDefault('extractionConservativePrompt')}
+                        title="Reset to default"
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <Textarea
+                      id="extractionConservativePrompt"
+                      value={settings.prompts.extractionConservativePrompt}
+                      onChange={(e) => updatePromptsSetting('extractionConservativePrompt', e.target.value)}
+                      rows={6}
+                      className="font-mono text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Used when extraction is set to &quot;Conservative&quot; - focuses on high-confidence entities.
+                    </p>
+                  </div>
+
+                  {/* Balanced Prompt */}
+                  <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="extractionBalancedPrompt" className="font-medium">
+                        Balanced Mode Prompt
+                      </Label>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => resetPromptToDefault('extractionBalancedPrompt')}
+                        title="Reset to default"
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <Textarea
+                      id="extractionBalancedPrompt"
+                      value={settings.prompts.extractionBalancedPrompt}
+                      onChange={(e) => updatePromptsSetting('extractionBalancedPrompt', e.target.value)}
+                      rows={6}
+                      className="font-mono text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Used when extraction is set to &quot;Balanced&quot; - moderate extraction depth.
+                    </p>
+                  </div>
+
+                  {/* Obsessive Prompt */}
+                  <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="extractionObsessivePrompt" className="font-medium">
+                        Obsessive Mode Prompt
+                      </Label>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => resetPromptToDefault('extractionObsessivePrompt')}
+                        title="Reset to default"
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <Textarea
+                      id="extractionObsessivePrompt"
+                      value={settings.prompts.extractionObsessivePrompt}
+                      onChange={(e) => updatePromptsSetting('extractionObsessivePrompt', e.target.value)}
+                      rows={10}
+                      className="font-mono text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Used when extraction is set to &quot;Obsessive&quot; - extracts every possible entity.
+                    </p>
                   </div>
                 </div>
               </CardContent>

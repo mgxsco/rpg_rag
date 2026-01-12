@@ -111,6 +111,12 @@ export interface CampaignSettings {
     maxNodes?: number
     showLinkLabels?: 'always' | 'on-hover' | 'never'
   }
+  prompts?: {
+    chatSystemPrompt?: string
+    extractionConservativePrompt?: string
+    extractionBalancedPrompt?: string
+    extractionObsessivePrompt?: string
+  }
 }
 
 // Campaign tables
@@ -118,7 +124,7 @@ export const campaigns = pgTable('campaigns', {
   id: uuid('id').defaultRandom().primaryKey(),
   name: text('name').notNull(),
   description: text('description'),
-  language: text('language').default('en').notNull(),
+  language: text('language').default('pt-BR').notNull(),
   settings: jsonb('settings').$type<CampaignSettings>().default({}),
   ownerId: uuid('owner_id')
     .notNull()

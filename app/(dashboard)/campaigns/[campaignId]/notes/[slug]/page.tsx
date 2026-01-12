@@ -10,6 +10,7 @@ import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
 import { MarkdownRenderer } from '@/components/editor/markdown-renderer'
 import { BacklinksPanel } from '@/components/notes/backlinks-panel'
 import { Edit, Lock, ArrowLeft, History } from 'lucide-react'
+import { ExtractEntitiesButton } from '@/components/notes/extract-entities-button'
 
 export default async function NoteViewPage({
   params,
@@ -93,7 +94,12 @@ export default async function NoteViewPage({
                 </div>
               </div>
               {isDM && (
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
+                  <ExtractEntitiesButton
+                    campaignId={params.campaignId}
+                    noteSlug={params.slug}
+                    noteTitle={note.title}
+                  />
                   <Link href={`/campaigns/${params.campaignId}/notes/${params.slug}/history`}>
                     <Button variant="outline" size="sm">
                       <History className="h-4 w-4 mr-1" />

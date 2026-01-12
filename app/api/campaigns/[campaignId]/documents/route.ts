@@ -146,6 +146,11 @@ export async function POST(
         aggressiveness: campaignSettings.extraction.aggressiveness,
         confidenceThreshold: campaignSettings.extraction.confidenceThreshold,
         enableRelationships: campaignSettings.extraction.enableRelationships,
+        customPrompts: {
+          extractionConservativePrompt: campaignSettings.prompts.extractionConservativePrompt,
+          extractionBalancedPrompt: campaignSettings.prompts.extractionBalancedPrompt,
+          extractionObsessivePrompt: campaignSettings.prompts.extractionObsessivePrompt,
+        },
       }
 
       // 4. Run extraction pipeline

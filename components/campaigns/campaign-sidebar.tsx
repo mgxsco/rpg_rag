@@ -11,6 +11,7 @@ import {
   Settings,
   ArrowLeft,
   BookOpen,
+  ScrollText,
 } from 'lucide-react'
 
 interface CampaignSidebarProps {
@@ -34,13 +35,18 @@ export function CampaignSidebar({ campaignId, isDM }: CampaignSidebarProps) {
       icon: BookOpen,
     },
     {
+      href: `/campaigns/${campaignId}/notes`,
+      label: 'Notes',
+      icon: ScrollText,
+    },
+    {
       href: `/campaigns/${campaignId}/graph`,
       label: 'Knowledge Graph',
       icon: Network,
     },
     {
       href: `/campaigns/${campaignId}/chat`,
-      label: 'AI Chat',
+      label: 'Oracle',
       icon: MessageSquare,
     },
     ...(isDM

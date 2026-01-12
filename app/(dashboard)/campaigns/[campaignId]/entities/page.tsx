@@ -2,32 +2,25 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { db, campaigns, campaignMembers, entities } from '@/lib/db'
-import { eq, and, desc } from 'drizzle-orm'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { eq, and, desc, asc } from 'drizzle-orm'
 import { Button } from '@/components/ui/button'
 import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
 import { EntityCard } from '@/components/entities/entity-card'
-import { Search, Filter, Plus, Upload, AlertTriangle } from 'lucide-react'
+import { EntityStats } from '@/components/entities/entity-stats'
+import { EntityToolbar } from '@/components/entities/entity-toolbar'
+import { EntityListRow } from '@/components/entities/entity-list-row'
+import { Filter, Plus, Upload, AlertTriangle } from 'lucide-react'
 import { Entity } from '@/lib/db/schema'
-
-// Format entity type for display (e.g., 'player_character' -> 'Player Character')
-function formatEntityType(type: string): string {
-  return type
-    .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ')
-}
 
 export default async function EntitiesPage({
   params,
   searchParams,
 }: {
   params: Promise<{ campaignId: string }>
-  searchParams: Promise<{ type?: string; search?: string }>
+  searchParams: Promise<{ type?: string; search?: string; view?: string; sort?: string }>
 }) {
   const { campaignId } = await params
-  const { type, search } = await searchParams
+  const { type, search, view = 'grid', sort = 'updated' } = await searchParams
 
   const session = await getSession()
   if (!session?.user?.id) {
@@ -62,6 +55,19 @@ export default async function EntitiesPage({
     migrationNeeded = true
   }
 
+  // Calculate stats before filtering
+  const totalCount = allEntities.filter(e => isDM || !e.isDmOnly).length
+  const statsByType: Record<string, number> = {}
+  for (const entity of allEntities) {
+    if (!isDM && entity.isDmOnly) continue
+    statsByType[entity.entityType] = (statsByType[entity.entityType] || 0) + 1
+  }
+
+  // Filter DM-only for non-DMs
+  if (!isDM) {
+    allEntities = allEntities.filter((e) => !e.isDmOnly)
+  }
+
   // Filter by type
   if (type) {
     allEntities = allEntities.filter((e) => e.entityType === type)
@@ -77,30 +83,37 @@ export default async function EntitiesPage({
     )
   }
 
-  // Filter DM-only for non-DMs
-  if (!isDM) {
-    allEntities = allEntities.filter((e) => !e.isDmOnly)
-  }
-
-  // Get stats
-  const stats = {
-    total: allEntities.length,
-    byType: {} as Record<string, number>,
-  }
-  for (const entity of allEntities) {
-    stats.byType[entity.entityType] = (stats.byType[entity.entityType] || 0) + 1
+  // Apply sorting
+  switch (sort) {
+    case 'name-asc':
+      allEntities.sort((a, b) => a.name.localeCompare(b.name))
+      break
+    case 'name-desc':
+      allEntities.sort((a, b) => b.name.localeCompare(a.name))
+      break
+    case 'type':
+      allEntities.sort((a, b) => a.entityType.localeCompare(b.entityType))
+      break
+    case 'oldest':
+      allEntities.sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime())
+      break
+    case 'updated':
+    default:
+      allEntities.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      break
   }
 
   return (
     <div className="flex flex-col md:flex-row gap-6">
       <CampaignSidebar campaignId={campaignId} isDM={isDM} />
 
-      <div className="flex-1">
+      <div className="flex-1 pb-20 md:pb-0">
+        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-bold">Wiki</h1>
             <p className="text-muted-foreground">
-              {stats.total} entities in your campaign knowledge base
+              {totalCount} entities in your campaign knowledge base
             </p>
           </div>
           <div className="flex gap-2">
@@ -119,46 +132,23 @@ export default async function EntitiesPage({
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row flex-wrap gap-4 mb-6">
-          <form className="flex-1 w-full sm:w-auto sm:min-w-[200px]">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                name="search"
-                placeholder="Search entities..."
-                defaultValue={search}
-                className="pl-9"
-              />
-            </div>
-          </form>
+        {/* Stats Dashboard */}
+        <EntityStats
+          campaignId={campaignId}
+          stats={statsByType}
+          total={totalCount}
+          activeType={type}
+        />
 
-          <div className="flex flex-wrap gap-2">
-            <Link href={`/campaigns/${campaignId}/entities`}>
-              <Badge
-                variant={!type ? 'default' : 'outline'}
-                className="cursor-pointer"
-              >
-                All ({stats.total})
-              </Badge>
-            </Link>
-            {Object.entries(stats.byType)
-              .sort(([, a], [, b]) => b - a) // Sort by count descending
-              .map(([typeValue, count]) => (
-                <Link
-                  key={typeValue}
-                  href={`/campaigns/${campaignId}/entities?type=${typeValue}`}
-                >
-                  <Badge
-                    variant={type === typeValue ? 'default' : 'outline'}
-                    className="cursor-pointer"
-                  >
-                    {formatEntityType(typeValue)} ({count})
-                  </Badge>
-                </Link>
-              ))}
-          </div>
-        </div>
+        {/* Toolbar with View Toggle, Sort, Search */}
+        <EntityToolbar
+          campaignId={campaignId}
+          view={view as 'grid' | 'list'}
+          sort={sort}
+          search={search}
+        />
 
+        {/* Content */}
         {migrationNeeded ? (
           <div className="text-center py-12">
             <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-yellow-500" />
@@ -171,15 +161,29 @@ export default async function EntitiesPage({
             </p>
           </div>
         ) : allEntities.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {allEntities.map((entity) => (
-              <EntityCard
-                key={entity.id}
-                entity={entity}
-                campaignId={campaignId}
-              />
-            ))}
-          </div>
+          view === 'list' ? (
+            // List View
+            <div className="border rounded-lg divide-y">
+              {allEntities.map((entity) => (
+                <EntityListRow
+                  key={entity.id}
+                  entity={entity}
+                  campaignId={campaignId}
+                />
+              ))}
+            </div>
+          ) : (
+            // Grid View
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {allEntities.map((entity) => (
+                <EntityCard
+                  key={entity.id}
+                  entity={entity}
+                  campaignId={campaignId}
+                />
+              ))}
+            </div>
+          )
         ) : (
           <div className="text-center py-12 text-muted-foreground">
             <Filter className="h-12 w-12 mx-auto mb-4" />

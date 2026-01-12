@@ -19,6 +19,8 @@ export interface SearchResult {
   entity_type: string
   chunk_text: string
   similarity: number
+  // Source type (entity or note)
+  source_type?: 'entity' | 'note'
   // Legacy aliases for backward compatibility
   note_id?: string
   note_title?: string
