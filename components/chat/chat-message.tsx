@@ -2,6 +2,7 @@
 
 import { ChatMessage } from '@/lib/types'
 import { SourceReferences } from './source-references'
+import { ChatContent } from './chat-content'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Bot, User, Search } from 'lucide-react'
 
@@ -43,7 +44,15 @@ export function ChatMessageComponent({
               : 'bg-primary text-primary-foreground'
           }`}
         >
-          <p className="whitespace-pre-wrap text-sm">{message.content}</p>
+          {isAssistant ? (
+            <ChatContent
+              content={message.content}
+              campaignId={campaignId}
+              className="text-sm"
+            />
+          ) : (
+            <p className="whitespace-pre-wrap text-sm">{message.content}</p>
+          )}
         </div>
 
         {isAssistant && message.sources && message.sources.length > 0 && (

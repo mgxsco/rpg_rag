@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { SearchResult } from '@/lib/types'
 import { Badge } from '@/components/ui/badge'
 import { FileText } from 'lucide-react'
+import { ChatContent } from './chat-content'
 
 interface SourceReferencesProps {
   sources: SearchResult[]
@@ -55,9 +56,12 @@ export function SourceReferences({ sources, campaignId, showContent = false }: S
                 )}
               </Link>
               {showContent && source.chunk_text && (
-                <p className="text-xs text-muted-foreground mt-1 line-clamp-3">
-                  {source.chunk_text}
-                </p>
+                <div className="text-xs text-muted-foreground mt-1 line-clamp-3">
+                  <ChatContent
+                    content={source.chunk_text}
+                    campaignId={campaignId}
+                  />
+                </div>
               )}
             </div>
           )
