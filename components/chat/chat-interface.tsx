@@ -3,11 +3,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ChatMessageComponent } from './chat-message'
 import { ChatMessage } from '@/lib/types'
-import { Send, Trash2, Loader2, MessageSquare, Search } from 'lucide-react'
+import { Send, Trash2, Loader2, Sparkles, BookOpen } from 'lucide-react'
 
 export type ChatMode = 'rag' | 'direct'
 
@@ -30,7 +29,6 @@ export function ChatInterface({
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    // Scroll to bottom when new messages arrive
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
@@ -59,41 +57,67 @@ export function ChatInterface({
   }
 
   return (
-    <Card className="flex flex-col h-[600px]">
-      <CardContent className="flex-1 flex flex-col p-4 overflow-hidden">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-medium">Chat History</h3>
-          {messages.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onClearHistory}
-              className="text-muted-foreground"
-            >
-              <Trash2 className="h-4 w-4 mr-1" />
-              Clear
-            </Button>
-          )}
-        </div>
+    <div className="oracle-tome">
+      {/* Tome Header */}
+      <div className="tome-header">
+        <div className="tome-header-ornament left">❧</div>
+        <h2 className="tome-title">
+          <span className="tome-icon">🔮</span>
+          The Oracle&apos;s Sanctum
+        </h2>
+        <div className="tome-header-ornament right">❧</div>
+      </div>
 
-        <ScrollArea className="flex-1 pr-4" ref={scrollRef}>
+      {/* Mode Selection - Magical Runes */}
+      <div className="oracle-modes">
+        <button
+          type="button"
+          onClick={() => setMode('rag')}
+          className={`oracle-mode-btn ${mode === 'rag' ? 'active' : ''}`}
+        >
+          <Sparkles className="w-4 h-4" />
+          <span>Consult Oracle</span>
+          <div className="mode-glow" />
+        </button>
+        <div className="mode-divider">⚔</div>
+        <button
+          type="button"
+          onClick={() => setMode('direct')}
+          className={`oracle-mode-btn ${mode === 'direct' ? 'active' : ''}`}
+        >
+          <BookOpen className="w-4 h-4" />
+          <span>Search Tomes</span>
+          <div className="mode-glow" />
+        </button>
+      </div>
+
+      {/* Scroll/Messages Area */}
+      <div className="tome-content">
+        <div className="tome-page-edge left" />
+        <ScrollArea className="tome-scroll" ref={scrollRef}>
           {messages.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-center text-muted-foreground">
-              <div>
-                <p className="text-lg font-medium mb-2">Ask me anything about your campaign!</p>
-                <p className="text-sm">
-                  Try questions like:
-                </p>
-                <ul className="text-sm mt-2 space-y-1">
-                  <li>&quot;Who is the main villain?&quot;</li>
-                  <li>&quot;What happened in the last session?&quot;</li>
-                  <li>&quot;Tell me about the city of Neverwinter&quot;</li>
-                  <li>&quot;What quests are currently active?&quot;</li>
+            <div className="oracle-empty">
+              <div className="oracle-crystal">🔮</div>
+              <h3>The Oracle Awaits...</h3>
+              <p className="oracle-subtitle">
+                {mode === 'rag'
+                  ? 'Ask and the spirits shall divine answers from your chronicles'
+                  : 'Search the ancient tomes for forgotten knowledge'
+                }
+              </p>
+              <div className="oracle-suggestions">
+                <p className="suggestions-title">Whisper your query...</p>
+                <ul>
+                  <li><span className="suggestion-icon">⚔</span> &ldquo;Who threatens the realm?&rdquo;</li>
+                  <li><span className="suggestion-icon">🏰</span> &ldquo;Tell me of ancient places&rdquo;</li>
+                  <li><span className="suggestion-icon">📜</span> &ldquo;What befell us last session?&rdquo;</li>
+                  <li><span className="suggestion-icon">💎</span> &ldquo;What treasures have we found?&rdquo;</li>
                 </ul>
               </div>
+              <div className="oracle-runes">᛭ ᚨ ᛊ ᚲ ᛭</div>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="tome-messages">
               {messages.map((message, index) => (
                 <ChatMessageComponent
                   key={index}
@@ -102,72 +126,74 @@ export function ChatInterface({
                 />
               ))}
               {sending && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Thinking...</span>
+                <div className="oracle-thinking">
+                  <div className="thinking-orb">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  </div>
+                  <span>The Oracle peers into the mists...</span>
                 </div>
               )}
             </div>
           )}
         </ScrollArea>
+        <div className="tome-page-edge right" />
+      </div>
 
-        <form onSubmit={handleSubmit} className="mt-4">
-          {/* Mode Toggle */}
-          <div className="flex items-center gap-1 mb-3 p-1 bg-muted/50 rounded-lg w-fit">
-            <button
-              type="button"
-              onClick={() => setMode('rag')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                mode === 'rag'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <MessageSquare className="h-4 w-4" />
-              <span>AI Chat</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode('direct')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                mode === 'direct'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Search className="h-4 w-4" />
-              <span>Search Only</span>
-            </button>
-          </div>
+      {/* Input Area - Inscription */}
+      <form onSubmit={handleSubmit} className="oracle-input-area">
+        <div className="input-ornament top">── ✦ ──</div>
 
-          <div className="flex gap-2">
-            <Textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={mode === 'rag'
-                ? "Ask a question about your campaign..."
-                : "Search your campaign knowledge base..."
-              }
-              className="min-h-[60px] resize-none"
-              disabled={sending}
-            />
-            <Button type="submit" disabled={!input.trim() || sending} className="px-6">
-              {sending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground mt-2">
-            {mode === 'rag'
-              ? 'AI searches your wiki and generates a response'
-              : 'Returns matching results directly without AI'
+        <div className="oracle-input-container">
+          <Textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={mode === 'rag'
+              ? "Speak your question unto the Oracle..."
+              : "What knowledge do you seek in the tomes..."
             }
-          </p>
-        </form>
-      </CardContent>
-    </Card>
+            className="oracle-textarea"
+            disabled={sending}
+          />
+          <Button
+            type="submit"
+            disabled={!input.trim() || sending}
+            className="oracle-send-btn"
+          >
+            {sending ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <Send className="h-5 w-5" />
+            )}
+          </Button>
+        </div>
+
+        <div className="input-footer">
+          <span className="input-hint">
+            {mode === 'rag'
+              ? '✨ The Oracle consults your chronicles'
+              : '📚 Direct search through ancient records'
+            }
+          </span>
+          {messages.length > 0 && (
+            <button
+              type="button"
+              onClick={onClearHistory}
+              className="clear-history-btn"
+            >
+              <Trash2 className="w-3 h-3" />
+              <span>Clear Visions</span>
+            </button>
+          )}
+        </div>
+      </form>
+
+      {/* Tome Footer Decoration */}
+      <div className="tome-footer">
+        <div className="tome-corner-decoration bl">◈</div>
+        <div className="tome-footer-text">~ Bound by Ancient Magic ~</div>
+        <div className="tome-corner-decoration br">◈</div>
+      </div>
+    </div>
   )
 }

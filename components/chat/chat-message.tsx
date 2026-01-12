@@ -3,8 +3,7 @@
 import { ChatMessage } from '@/lib/types'
 import { SourceReferences } from './source-references'
 import { ChatContent } from './chat-content'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Bot, User, Search } from 'lucide-react'
+import { Scroll, Feather, Eye } from 'lucide-react'
 
 interface ChatMessageComponentProps {
   message: ChatMessage
@@ -16,52 +15,66 @@ export function ChatMessageComponent({
   campaignId,
 }: ChatMessageComponentProps) {
   const isAssistant = message.role === 'assistant'
-
-  // Detect if this is a search-only result (direct mode)
   const isSearchResult = message.content?.startsWith('Found ') || message.content?.startsWith('No matching')
 
-  return (
-    <div className={`flex gap-3 ${isAssistant ? '' : 'flex-row-reverse'}`}>
-      <Avatar className={`h-8 w-8 ${isAssistant ? 'bg-primary' : 'bg-secondary'}`}>
-        <AvatarFallback>
-          {isAssistant ? (
-            isSearchResult ? (
-              <Search className="h-4 w-4 text-primary-foreground" />
-            ) : (
-              <Bot className="h-4 w-4 text-primary-foreground" />
-            )
-          ) : (
-            <User className="h-4 w-4" />
-          )}
-        </AvatarFallback>
-      </Avatar>
+  if (!isAssistant) {
+    // User message - styled as adventurer's query
+    return (
+      <div className="adventurer-message">
+        <div className="adventurer-icon">
+          <Feather className="w-4 h-4" />
+        </div>
+        <div className="adventurer-content">
+          <div className="adventurer-label">Your Query</div>
+          <p>{message.content}</p>
+        </div>
+      </div>
+    )
+  }
 
-      <div className={`flex-1 space-y-2 ${isAssistant ? '' : 'text-right'}`}>
-        <div
-          className={`inline-block rounded-lg px-4 py-2 max-w-[85%] ${
-            isAssistant
-              ? 'bg-muted text-left'
-              : 'bg-primary text-primary-foreground'
-          }`}
-        >
-          {isAssistant ? (
-            <ChatContent
-              content={message.content}
-              campaignId={campaignId}
-              className="text-sm"
-            />
+  // Oracle/Search response
+  return (
+    <div className={`oracle-message ${isSearchResult ? 'search-result' : ''}`}>
+      <div className="oracle-message-header">
+        <div className="oracle-icon">
+          {isSearchResult ? (
+            <Scroll className="w-5 h-5" />
           ) : (
-            <p className="whitespace-pre-wrap text-sm">{message.content}</p>
+            <Eye className="w-5 h-5" />
           )}
         </div>
+        <span className="oracle-label">
+          {isSearchResult ? 'From the Archives' : 'The Oracle Speaks'}
+        </span>
+        <div className="oracle-header-decoration">✧</div>
+      </div>
 
-        {isAssistant && message.sources && message.sources.length > 0 && (
+      <div className="oracle-message-body">
+        <div className="oracle-quote-mark">"</div>
+        <ChatContent
+          content={message.content}
+          campaignId={campaignId}
+          className="oracle-text"
+        />
+        <div className="oracle-quote-mark end">"</div>
+      </div>
+
+      {message.sources && message.sources.length > 0 && (
+        <div className="oracle-sources">
+          <div className="sources-header">
+            <span className="sources-icon">📜</span>
+            <span>Ancient References</span>
+          </div>
           <SourceReferences
             sources={message.sources}
             campaignId={campaignId}
             showContent={isSearchResult}
           />
-        )}
+        </div>
+      )}
+
+      <div className="oracle-message-footer">
+        <span className="oracle-seal">◆</span>
       </div>
     </div>
   )

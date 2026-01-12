@@ -525,3 +525,768 @@
     touch-action: manipulation;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   ORACLE'S SANCTUM - Fantasy Chat Interface
+   ═══════════════════════════════════════════════════════════════ */
+
+.oracle-tome {
+  background: linear-gradient(180deg,
+    hsl(30 25% 18%) 0%,
+    hsl(25 30% 12%) 50%,
+    hsl(20 25% 10%) 100%
+  );
+  border: 3px solid hsl(35 40% 25%);
+  border-radius: 8px;
+  box-shadow:
+    0 0 20px rgba(0,0,0,0.5),
+    inset 0 0 60px rgba(0,0,0,0.3),
+    0 0 40px hsl(40 60% 40% / 0.1);
+  position: relative;
+  overflow: hidden;
+  min-height: 600px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Parchment texture overlay */
+.oracle-tome::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.05;
+  pointer-events: none;
+}
+
+/* Corner decorations */
+.oracle-tome::after {
+  content: '◈';
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  font-size: 1.2rem;
+  color: hsl(40 70% 50% / 0.6);
+}
+
+/* Tome Header */
+.tome-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  background: linear-gradient(180deg,
+    hsl(35 30% 20%) 0%,
+    hsl(30 25% 15%) 100%
+  );
+  border-bottom: 2px solid hsl(40 50% 35% / 0.5);
+  position: relative;
+}
+
+.tome-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 10%;
+  right: 10%;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent,
+    hsl(40 70% 50% / 0.5),
+    transparent
+  );
+}
+
+.tome-header-ornament {
+  font-size: 1.5rem;
+  color: hsl(40 60% 45%);
+  opacity: 0.7;
+}
+
+.tome-title {
+  font-family: 'Cinzel', serif;
+  font-size: 1.25rem;
+  color: hsl(38 50% 75%);
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tome-icon {
+  font-size: 1.5rem;
+}
+
+/* Oracle Mode Selector */
+.oracle-modes {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: hsl(25 25% 12%);
+  border-bottom: 1px solid hsl(35 30% 20%);
+}
+
+.oracle-mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  color: hsl(35 20% 55%);
+  background: transparent;
+  border: 1px solid hsl(35 30% 25%);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.oracle-mode-btn:hover {
+  color: hsl(40 50% 70%);
+  border-color: hsl(40 50% 40%);
+}
+
+.oracle-mode-btn.active {
+  color: hsl(40 80% 65%);
+  background: linear-gradient(180deg,
+    hsl(35 40% 18%) 0%,
+    hsl(30 35% 14%) 100%
+  );
+  border-color: hsl(40 60% 45%);
+  box-shadow:
+    0 0 10px hsl(40 70% 50% / 0.2),
+    inset 0 1px 0 hsl(40 50% 40% / 0.2);
+}
+
+.oracle-mode-btn .mode-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, hsl(40 80% 50% / 0.15), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.oracle-mode-btn.active .mode-glow {
+  opacity: 1;
+}
+
+.mode-divider {
+  color: hsl(35 30% 35%);
+  font-size: 0.9rem;
+}
+
+/* Tome Content Area */
+.tome-content {
+  flex: 1;
+  display: flex;
+  position: relative;
+  min-height: 300px;
+  overflow: hidden;
+}
+
+.tome-page-edge {
+  width: 12px;
+  background: linear-gradient(90deg,
+    hsl(30 20% 15%) 0%,
+    hsl(35 25% 20%) 50%,
+    hsl(30 20% 18%) 100%
+  );
+  box-shadow: inset -2px 0 4px rgba(0,0,0,0.3);
+}
+
+.tome-page-edge.right {
+  box-shadow: inset 2px 0 4px rgba(0,0,0,0.3);
+}
+
+.tome-scroll {
+  flex: 1;
+  padding: 1rem;
+  background: linear-gradient(180deg,
+    hsl(35 30% 88%) 0%,
+    hsl(38 35% 85%) 50%,
+    hsl(35 28% 82%) 100%
+  );
+}
+
+.tome-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding-bottom: 1rem;
+}
+
+/* Oracle Empty State */
+.oracle-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2rem;
+  min-height: 300px;
+  color: hsl(25 30% 35%);
+}
+
+.oracle-crystal {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  animation: float 3s ease-in-out infinite;
+  filter: drop-shadow(0 0 20px hsl(280 50% 50% / 0.3));
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.oracle-empty h3 {
+  font-family: 'Cinzel', serif;
+  font-size: 1.5rem;
+  color: hsl(25 40% 30%);
+  margin-bottom: 0.5rem;
+}
+
+.oracle-subtitle {
+  font-style: italic;
+  color: hsl(25 25% 45%);
+  margin-bottom: 1.5rem;
+}
+
+.oracle-suggestions {
+  background: hsl(35 40% 92%);
+  border: 1px solid hsl(30 30% 75%);
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.suggestions-title {
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  color: hsl(25 35% 40%);
+  margin-bottom: 0.75rem;
+}
+
+.oracle-suggestions ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.oracle-suggestions li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  font-style: italic;
+  color: hsl(25 30% 35%);
+}
+
+.suggestion-icon {
+  font-size: 1rem;
+}
+
+.oracle-runes {
+  margin-top: 1.5rem;
+  font-size: 1.5rem;
+  letter-spacing: 0.5rem;
+  color: hsl(25 20% 65%);
+  opacity: 0.6;
+}
+
+/* Oracle Thinking State */
+.oracle-thinking {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: hsl(35 35% 90%);
+  border-radius: 8px;
+  border: 1px solid hsl(30 25% 80%);
+}
+
+.thinking-orb {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, hsl(280 40% 50%), hsl(260 50% 40%));
+  border-radius: 50%;
+  color: white;
+  box-shadow: 0 0 15px hsl(280 50% 50% / 0.4);
+}
+
+.oracle-thinking span {
+  font-style: italic;
+  color: hsl(25 30% 40%);
+}
+
+/* Adventurer Message (User) */
+.adventurer-message {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin-left: auto;
+  max-width: 85%;
+}
+
+.adventurer-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, hsl(25 50% 45%), hsl(30 45% 35%));
+  border-radius: 50%;
+  color: hsl(35 40% 90%);
+  flex-shrink: 0;
+  order: 1;
+}
+
+.adventurer-content {
+  background: linear-gradient(180deg,
+    hsl(30 45% 40%) 0%,
+    hsl(25 40% 32%) 100%
+  );
+  border-radius: 12px 12px 4px 12px;
+  padding: 0.75rem 1rem;
+  color: hsl(35 40% 92%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.adventurer-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: hsl(40 50% 75%);
+  margin-bottom: 0.25rem;
+  font-family: 'Cinzel', serif;
+}
+
+.adventurer-content p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Oracle Message (Assistant) */
+.oracle-message {
+  background: linear-gradient(180deg,
+    hsl(38 45% 95%) 0%,
+    hsl(35 40% 92%) 100%
+  );
+  border: 2px solid hsl(35 35% 80%);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow:
+    0 4px 12px rgba(0,0,0,0.08),
+    inset 0 1px 0 hsl(40 50% 98%);
+}
+
+.oracle-message.search-result {
+  border-color: hsl(220 40% 75%);
+  background: linear-gradient(180deg,
+    hsl(220 30% 97%) 0%,
+    hsl(220 25% 94%) 100%
+  );
+}
+
+.oracle-message-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(180deg,
+    hsl(35 40% 88%) 0%,
+    hsl(35 35% 85%) 100%
+  );
+  border-bottom: 1px solid hsl(35 30% 78%);
+}
+
+.oracle-message.search-result .oracle-message-header {
+  background: linear-gradient(180deg,
+    hsl(220 35% 90%) 0%,
+    hsl(220 30% 87%) 100%
+  );
+  border-bottom-color: hsl(220 25% 80%);
+}
+
+.oracle-icon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, hsl(280 45% 55%), hsl(260 50% 45%));
+  border-radius: 50%;
+  color: white;
+  box-shadow: 0 0 8px hsl(280 50% 50% / 0.3);
+}
+
+.oracle-message.search-result .oracle-icon {
+  background: linear-gradient(135deg, hsl(220 50% 50%), hsl(200 55% 40%));
+  box-shadow: 0 0 8px hsl(220 50% 50% / 0.3);
+}
+
+.oracle-label {
+  font-family: 'Cinzel', serif;
+  font-size: 0.8rem;
+  color: hsl(25 35% 40%);
+  flex: 1;
+}
+
+.oracle-header-decoration {
+  color: hsl(40 60% 60%);
+}
+
+.oracle-message-body {
+  padding: 1rem;
+  position: relative;
+}
+
+.oracle-quote-mark {
+  position: absolute;
+  font-size: 3rem;
+  font-family: Georgia, serif;
+  color: hsl(40 40% 75%);
+  opacity: 0.4;
+  line-height: 1;
+  top: 0;
+  left: 0.5rem;
+}
+
+.oracle-quote-mark.end {
+  left: auto;
+  right: 0.5rem;
+  bottom: 0;
+  top: auto;
+}
+
+.oracle-text {
+  padding: 0 1.5rem;
+  color: hsl(25 40% 25%);
+  line-height: 1.7;
+}
+
+.oracle-sources {
+  padding: 0.75rem 1rem;
+  background: hsl(35 30% 90%);
+  border-top: 1px solid hsl(35 25% 82%);
+}
+
+.sources-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: 'Cinzel', serif;
+  font-size: 0.75rem;
+  color: hsl(25 30% 45%);
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.oracle-message-footer {
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem;
+  background: linear-gradient(180deg,
+    hsl(35 30% 85%) 0%,
+    hsl(35 35% 88%) 100%
+  );
+  border-top: 1px solid hsl(35 25% 80%);
+}
+
+.oracle-seal {
+  color: hsl(40 50% 55%);
+  font-size: 0.8rem;
+}
+
+/* Source References */
+.source-references {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.source-card {
+  background: hsl(38 40% 94%);
+  border: 1px solid hsl(35 30% 82%);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.source-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  color: hsl(25 40% 30%);
+  text-decoration: none;
+  transition: background 0.2s;
+}
+
+.source-header:hover {
+  background: hsl(40 45% 90%);
+}
+
+.source-icon {
+  font-size: 1rem;
+}
+
+.source-name {
+  flex: 1;
+  font-weight: 500;
+  font-size: 0.85rem;
+}
+
+.source-type {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  padding: 0.15rem 0.4rem;
+  background: hsl(35 25% 85%);
+  border-radius: 3px;
+  color: hsl(25 30% 45%);
+}
+
+.source-similarity {
+  font-size: 0.7rem;
+  color: hsl(140 40% 35%);
+  font-weight: 500;
+}
+
+.source-excerpt {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid hsl(35 25% 85%);
+  font-size: 0.8rem;
+  color: hsl(25 25% 40%);
+  background: hsl(38 35% 96%);
+  max-height: 100px;
+  overflow-y: auto;
+}
+
+/* Oracle Input Area */
+.oracle-input-area {
+  padding: 1rem;
+  background: linear-gradient(180deg,
+    hsl(30 25% 15%) 0%,
+    hsl(25 20% 12%) 100%
+  );
+  border-top: 2px solid hsl(35 30% 25%);
+}
+
+.input-ornament {
+  text-align: center;
+  color: hsl(40 50% 45%);
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+  opacity: 0.7;
+}
+
+.oracle-input-container {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.oracle-textarea {
+  flex: 1;
+  min-height: 60px;
+  resize: none;
+  background: linear-gradient(180deg,
+    hsl(35 35% 90%) 0%,
+    hsl(38 30% 87%) 100%
+  );
+  border: 2px solid hsl(35 30% 70%);
+  border-radius: 6px;
+  padding: 0.75rem;
+  font-family: 'Crimson Pro', Georgia, serif;
+  font-size: 0.95rem;
+  color: hsl(25 40% 20%);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.08);
+}
+
+.oracle-textarea::placeholder {
+  color: hsl(25 20% 55%);
+  font-style: italic;
+}
+
+.oracle-textarea:focus {
+  outline: none;
+  border-color: hsl(40 60% 50%);
+  box-shadow:
+    inset 0 2px 4px rgba(0,0,0,0.08),
+    0 0 0 3px hsl(40 60% 50% / 0.15);
+}
+
+.oracle-send-btn {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg,
+    hsl(40 65% 50%) 0%,
+    hsl(35 60% 40%) 100%
+  );
+  border: 2px solid hsl(40 50% 45%);
+  border-radius: 50%;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.oracle-send-btn:hover:not(:disabled) {
+  background: linear-gradient(180deg,
+    hsl(40 70% 55%) 0%,
+    hsl(35 65% 45%) 100%
+  );
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.oracle-send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.input-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.75rem;
+}
+
+.input-hint {
+  font-size: 0.75rem;
+  color: hsl(35 25% 55%);
+}
+
+.clear-history-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  color: hsl(0 40% 55%);
+  background: transparent;
+  border: 1px solid hsl(0 30% 40%);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.clear-history-btn:hover {
+  background: hsl(0 40% 35%);
+  color: white;
+}
+
+/* Tome Footer */
+.tome-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 0.5rem;
+  background: hsl(25 25% 10%);
+  border-top: 1px solid hsl(35 25% 20%);
+}
+
+.tome-corner-decoration {
+  color: hsl(40 50% 40%);
+  font-size: 0.8rem;
+}
+
+.tome-footer-text {
+  font-family: 'Cinzel', serif;
+  font-size: 0.7rem;
+  color: hsl(35 25% 45%);
+  letter-spacing: 0.1em;
+}
+
+/* Dark mode adjustments */
+.dark .tome-scroll {
+  background: linear-gradient(180deg,
+    hsl(30 20% 18%) 0%,
+    hsl(28 22% 15%) 50%,
+    hsl(25 18% 13%) 100%
+  );
+}
+
+.dark .oracle-empty {
+  color: hsl(35 25% 65%);
+}
+
+.dark .oracle-empty h3 {
+  color: hsl(38 35% 75%);
+}
+
+.dark .oracle-suggestions {
+  background: hsl(30 18% 20%);
+  border-color: hsl(35 20% 30%);
+}
+
+.dark .adventurer-content {
+  background: linear-gradient(180deg,
+    hsl(35 45% 45%) 0%,
+    hsl(30 40% 35%) 100%
+  );
+}
+
+.dark .oracle-message {
+  background: linear-gradient(180deg,
+    hsl(30 20% 20%) 0%,
+    hsl(28 18% 17%) 100%
+  );
+  border-color: hsl(35 25% 28%);
+}
+
+.dark .oracle-message-header {
+  background: linear-gradient(180deg,
+    hsl(30 22% 22%) 0%,
+    hsl(28 20% 19%) 100%
+  );
+  border-bottom-color: hsl(35 20% 25%);
+}
+
+.dark .oracle-text {
+  color: hsl(35 30% 80%);
+}
+
+.dark .oracle-sources {
+  background: hsl(28 18% 15%);
+  border-top-color: hsl(30 15% 22%);
+}
+
+.dark .source-card {
+  background: hsl(30 15% 18%);
+  border-color: hsl(35 15% 25%);
+}
+
+.dark .source-header {
+  color: hsl(38 35% 80%);
+}
+
+.dark .source-excerpt {
+  background: hsl(28 12% 15%);
+  border-top-color: hsl(30 12% 22%);
+  color: hsl(35 20% 70%);
+}
+
+.dark .oracle-textarea {
+  background: linear-gradient(180deg,
+    hsl(30 18% 18%) 0%,
+    hsl(28 15% 15%) 100%
+  );
+  border-color: hsl(35 20% 30%);
+  color: hsl(38 30% 85%);
+}
+
+.dark .oracle-textarea::placeholder {
+  color: hsl(30 15% 50%);
+}
