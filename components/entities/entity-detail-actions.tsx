@@ -11,35 +11,26 @@ interface EntityDetailActionsProps {
   entityId: string
   entityName: string
   campaignId: string
-  variant?: 'default' | 'sidebar'
 }
 
 export function EntityDetailActions({
   entityId,
   entityName,
   campaignId,
-  variant = 'default',
 }: EntityDetailActionsProps) {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [mergeOpen, setMergeOpen] = useState(false)
 
-  const isSidebar = variant === 'sidebar'
-
   return (
     <>
-      <div className={isSidebar ? 'flex flex-col gap-1.5' : 'flex gap-2'}>
+      <div className="flex gap-2">
         <Link href={`/campaigns/${campaignId}/entities/${entityId}/edit`}>
-          <Button size="sm" className={isSidebar ? 'w-full justify-start' : ''}>
+          <Button size="sm">
             <Edit className="h-4 w-4 mr-1" />
             Edit
           </Button>
         </Link>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setMergeOpen(true)}
-          className={isSidebar ? 'w-full justify-start' : ''}
-        >
+        <Button size="sm" variant="outline" onClick={() => setMergeOpen(true)}>
           <GitMerge className="h-4 w-4 mr-1" />
           Merge
         </Button>
@@ -47,7 +38,7 @@ export function EntityDetailActions({
           size="sm"
           variant="outline"
           onClick={() => setDeleteOpen(true)}
-          className={`text-destructive hover:text-destructive ${isSidebar ? 'w-full justify-start' : ''}`}
+          className="text-destructive hover:text-destructive"
         >
           <Trash2 className="h-4 w-4 mr-1" />
           Delete

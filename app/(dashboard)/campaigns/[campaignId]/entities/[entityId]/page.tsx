@@ -1,18 +1,25 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth'
-import { db, campaigns, campaignMembers, entities, relationships, entitySources } from '@/lib/db'
-import { eq, and } from 'drizzle-orm'
+import { db, campaigns, campaignMembers, entities, relationships, entitySources, users } from '@/lib/db'
+import { eq, and, or } from 'drizzle-orm'
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
 import { MarkdownRenderer } from '@/components/editor/markdown-renderer'
 import { EntityDetailActions } from '@/components/entities/entity-detail-actions'
 import { EntityComments } from '@/components/entities/entity-comments'
-import { EntitySidebar } from '@/components/entities/entity-sidebar'
-import { EntityConnectionsTabs } from '@/components/entities/entity-connections-tabs'
-import { EntitySourcesAccordion } from '@/components/entities/entity-sources-accordion'
-import { Lock, ArrowLeft, User } from 'lucide-react'
+import {
+  Edit,
+  Lock,
+  ArrowLeft,
+  History,
+  Link as LinkIcon,
+  FileText,
+  ArrowRight,
+  User,
+} from 'lucide-react'
 
 export default async function EntityViewPage({
   params,
@@ -147,8 +154,7 @@ export default async function EntityViewPage({
     <div className="flex gap-3 sm:gap-4 md:gap-5">
       <CampaignSidebar campaignId={params.campaignId} isDM={isDM} />
 
-      {/* Main Content Area */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 max-w-5xl">
         <Link
           href={`/campaigns/${params.campaignId}/entities`}
           className="inline-flex items-center text-muted-foreground hover:text-foreground mb-4"
@@ -157,120 +163,203 @@ export default async function EntityViewPage({
           Back to wiki
         </Link>
 
-        {/* Two Column Layout */}
-        <div className="flex gap-6">
-          {/* Left Column - Main Content */}
-          <article className="flex-1 min-w-0 max-w-4xl">
-            {/* Header Ornament */}
-            <div className="header-ornament">
-              <span>◆━━</span>
-              <span className="ornament-center">⚜</span>
-              <span>━━◆</span>
-            </div>
+        <article>
+          {/* Header Ornament */}
+          <div className="header-ornament">
+            <span>◆━━</span>
+            <span className="ornament-center">⚜</span>
+            <span>━━◆</span>
+          </div>
 
-            <header className="mb-4">
-              <div className="flex items-start justify-between gap-4 mb-2">
-                <div>
-                  <h1 className="entity-detail-title text-3xl font-bold mb-2 flex items-center gap-2">
-                    {entity.name}
-                    {entity.isDmOnly && (
-                      <Lock className="dm-lock-icon h-5 w-5" />
-                    )}
-                  </h1>
-                  {/* Mobile: Show type badge and metadata inline */}
-                  <div className="flex flex-wrap items-center gap-2 lg:hidden">
-                    <Badge variant="outline" className="entity-type-badge">
-                      {entity.entityType.replace('_', ' ')}
-                    </Badge>
-                    <span className="text-sm text-muted-foreground">
-                      Updated {new Date(entity.updatedAt).toLocaleDateString()}
+          <header className="mb-4">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h1 className="entity-detail-title text-3xl font-bold mb-2 flex items-center gap-2">
+                  {entity.name}
+                  {entity.isDmOnly && (
+                    <Lock className="dm-lock-icon h-5 w-5" />
+                  )}
+                </h1>
+                <Badge variant="outline" className="entity-type-badge mb-2">
+                  {entity.entityType.replace('_', ' ')}
+                </Badge>
+                {entity.aliases && entity.aliases.length > 0 && (
+                  <p className="text-sm text-muted-foreground italic">
+                    Also known as: {entity.aliases.join(', ')}
+                  </p>
+                )}
+                {entity.entityType === 'player_character' && entity.player && (
+                  <div className="flex items-center gap-2 mt-2 text-sm">
+                    <User className="h-4 w-4 text-primary" />
+                    <span className="text-muted-foreground">Played by:</span>
+                    <span className="font-medium">
+                      {entity.player.user.name || entity.player.user.email}
                     </span>
-                  </div>
-                  {entity.aliases && entity.aliases.length > 0 && (
-                    <p className="text-sm text-muted-foreground italic mt-1 lg:hidden">
-                      Also known as: {entity.aliases.join(', ')}
-                    </p>
-                  )}
-                  {entity.entityType === 'player_character' && entity.player && (
-                    <div className="flex items-center gap-2 mt-2 text-sm lg:hidden">
-                      <User className="h-4 w-4 text-primary" />
-                      <span className="text-muted-foreground">Played by:</span>
-                      <span className="font-medium">
-                        {entity.player.user.name || entity.player.user.email}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                {/* Mobile: Show DM actions in header */}
-                {isDM && (
-                  <div className="lg:hidden">
-                    <EntityDetailActions
-                      entityId={params.entityId}
-                      entityName={entity.name}
-                      campaignId={params.campaignId}
-                    />
                   </div>
                 )}
               </div>
-
-              {/* Gold separator */}
-              <div className="separator-gold my-4" />
-            </header>
-
-            {/* Main Content */}
-            <Card className="mb-4">
-              <CardContent className="pt-6 prose prose-sm dark:prose-invert max-w-none">
-                <MarkdownRenderer
-                  content={entity.content || ''}
+              {isDM && (
+                <EntityDetailActions
+                  entityId={params.entityId}
+                  entityName={entity.name}
                   campaignId={params.campaignId}
-                  noteMap={entityMap}
-                  isEntityMode={true}
                 />
-              </CardContent>
-            </Card>
-
-            {/* Mobile: Connections and Sources (shown as cards on mobile) */}
-            <div className="lg:hidden space-y-4 mb-4">
-              {(outgoingRels.length > 0 || incomingRels.length > 0 || contentBacklinks.length > 0) && (
-                <Card>
-                  <CardContent className="pt-4">
-                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                      Connections
-                    </h3>
-                    <EntityConnectionsTabs
-                      campaignId={params.campaignId}
-                      outgoingRels={outgoingRels}
-                      incomingRels={incomingRels}
-                      contentBacklinks={contentBacklinks}
-                    />
-                  </CardContent>
-                </Card>
-              )}
-
-              {sources.length > 0 && (
-                <EntitySourcesAccordion sources={sources} />
               )}
             </div>
+            <p className="text-sm text-muted-foreground">
+              Last updated {new Date(entity.updatedAt).toLocaleString()}
+            </p>
 
-            {/* Comments Section */}
-            <EntityComments
-              entityId={params.entityId}
-              currentUserId={session.user.id}
-              isDM={isDM}
-            />
-          </article>
+            {/* Gold separator */}
+            <div className="separator-gold my-4" />
+          </header>
 
-          {/* Right Column - Sidebar (Desktop Only) */}
-          <EntitySidebar
-            entity={entity}
-            campaignId={params.campaignId}
+          <Card className="mb-4">
+            <CardContent className="pt-6 prose prose-sm dark:prose-invert max-w-none">
+              <MarkdownRenderer
+                content={entity.content || ''}
+                campaignId={params.campaignId}
+                noteMap={entityMap}
+                isEntityMode={true}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Relationships */}
+          {outgoingRels.length > 0 && (
+            <Card className="mb-4">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <span className="section-ornament">⚔</span>
+                  Relationships
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {outgoingRels.map((rel) => (
+                    <div key={rel.id} className="flex items-center gap-2">
+                      <Badge variant="outline" className="shrink-0">
+                        {rel.relationshipType.replace('_', ' ')}
+                      </Badge>
+                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                      <Link
+                        href={`/campaigns/${params.campaignId}/entities/${rel.targetEntity.id}`}
+                        className="text-primary hover:underline"
+                      >
+                        {rel.targetEntity.name}
+                      </Link>
+                      <Badge variant="secondary" className="text-xs">
+                        {rel.targetEntity.entityType.replace('_', ' ')}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Backlinks (Incoming Relationships) */}
+          {(incomingRels.length > 0 || contentBacklinks.length > 0) && (
+            <Card className="mb-4">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <span className="section-ornament">🔗</span>
+                  Backlinks
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {/* Relationship backlinks */}
+                  {incomingRels.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium text-muted-foreground mb-2">
+                        Linked from relationships
+                      </h4>
+                      <div className="space-y-2">
+                        {incomingRels.map((rel) => (
+                          <div key={rel.id} className="flex items-center gap-2">
+                            <Link
+                              href={`/campaigns/${params.campaignId}/entities/${rel.sourceEntity.id}`}
+                              className="text-primary hover:underline"
+                            >
+                              {rel.sourceEntity.name}
+                            </Link>
+                            <Badge variant="secondary" className="text-xs">
+                              {rel.sourceEntity.entityType.replace('_', ' ')}
+                            </Badge>
+                            <span className="text-muted-foreground text-sm">
+                              ({rel.reverseLabel || rel.relationshipType.replace('_', ' ')})
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Content backlinks */}
+                  {contentBacklinks.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium text-muted-foreground mb-2">
+                        Mentioned in
+                      </h4>
+                      <div className="space-y-2">
+                        {contentBacklinks.map((e) => (
+                          <div key={e.id} className="flex items-center gap-2">
+                            <Link
+                              href={`/campaigns/${params.campaignId}/entities/${e.id}`}
+                              className="text-primary hover:underline"
+                            >
+                              {e.name}
+                            </Link>
+                            <Badge variant="secondary" className="text-xs">
+                              {e.entityType.replace('_', ' ')}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Source Documents */}
+          {sources.length > 0 && (
+            <Card className="mb-4">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <span className="section-ornament">📜</span>
+                  Sources
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {sources.map((source) => (
+                    <div key={source.id} className="border-l-2 border-muted pl-4">
+                      <p className="font-medium text-sm">{source.document.name}</p>
+                      {source.excerpt && (
+                        <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                          "{source.excerpt}"
+                        </p>
+                      )}
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Extracted {new Date(source.document.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Comments Section */}
+          <EntityComments
+            entityId={params.entityId}
+            currentUserId={session.user.id}
             isDM={isDM}
-            outgoingRels={outgoingRels}
-            incomingRels={incomingRels}
-            contentBacklinks={contentBacklinks}
-            sources={sources}
           />
-        </div>
+        </article>
       </div>
     </div>
   )
