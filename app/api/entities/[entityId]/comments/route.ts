@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { db, entities, entityComments, campaignMembers, campaigns } from '@/lib/db'
+import { db, entities, entityComments, campaignMembers, campaigns, users } from '@/lib/db'
 import { eq, and, desc } from 'drizzle-orm'
 
 // GET comments for an entity
@@ -149,7 +149,7 @@ export async function POST(
 
     // Fetch user info for the response
     const user = await db.query.users.findFirst({
-      where: eq(entityComments.userId, session.user.id),
+      where: eq(users.id, session.user.id),
       columns: {
         id: true,
         name: true,
