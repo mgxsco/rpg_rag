@@ -81,10 +81,16 @@ export function CampaignChat({ campaignId, currentUserId }: CampaignChatProps) {
 
   // Subscribe to Supabase Realtime for new messages
   useEffect(() => {
-    let channel: ReturnType<ReturnType<typeof getSupabaseClient>['channel']> | null = null
+    let channel: ReturnType<NonNullable<ReturnType<typeof getSupabaseClient>>['channel']> | null = null
+
+    const supabase = getSupabaseClient()
+    if (!supabase) {
+      // Supabase not configured - realtime disabled, messages will still work via polling
+      console.warn('Supabase realtime not available - using fetch only')
+      return
+    }
 
     try {
-      const supabase = getSupabaseClient()
       channel = supabase.channel(getCampaignChannelName(campaignId))
 
       channel

@@ -7,7 +7,7 @@ let supabaseClient: SupabaseClient | null = null
  * Get Supabase client for client-side usage (realtime subscriptions)
  * Uses anon key which has row-level security applied
  */
-export function getSupabaseClient(): SupabaseClient {
+export function getSupabaseClient(): SupabaseClient | null {
   if (supabaseClient) {
     return supabaseClient
   }
@@ -16,7 +16,8 @@ export function getSupabaseClient(): SupabaseClient {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Supabase environment variables are not configured')
+    console.warn('Supabase environment variables not configured - realtime disabled')
+    return null
   }
 
   supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
