@@ -12,8 +12,8 @@ export function getSupabaseClient(): SupabaseClient | null {
     return supabaseClient
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_DATABASE_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_DATABASE_SUPABASE_ANON_KEY
 
   if (!supabaseUrl || !supabaseAnonKey) {
     console.warn('Supabase environment variables not configured - realtime disabled')
@@ -37,7 +37,7 @@ export function getSupabaseClient(): SupabaseClient | null {
  * Only use in API routes, never expose to client
  */
 export function getSupabaseServer(): SupabaseClient {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseUrl = process.env.NEXT_PUBLIC_DATABASE_SUPABASE_URL
   const supabaseServiceKey = process.env.DATABASE_SUPABASE_SERVICE_ROLE_KEY
 
   if (!supabaseUrl || !supabaseServiceKey) {
