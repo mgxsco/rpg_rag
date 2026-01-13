@@ -1,4 +1,4 @@
-import { sql } from '@vercel/postgres'
+import { sql } from '@/lib/db'
 
 /**
  * Ensure the language column exists on campaigns table
@@ -44,7 +44,7 @@ export async function ensureKnowledgeGraphTables(): Promise<{ migrated: boolean;
     await ensureCampaignLanguageColumn()
     await ensureCampaignSettingsColumn()
 
-    if (result.rows[0]?.exists) {
+    if (result[0]?.exists) {
       return { migrated: false }
     }
 
@@ -169,7 +169,7 @@ export async function ensureCampaignInvitesTable(): Promise<{ migrated: boolean;
       ) as exists
     `
 
-    if (result.rows[0]?.exists) {
+    if (result[0]?.exists) {
       return { migrated: false }
     }
 

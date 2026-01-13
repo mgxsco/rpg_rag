@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { db, campaigns, campaignMembers, messages, users } from '@/lib/db'
-import { eq, and, desc, asc } from 'drizzle-orm'
-import { getPusherServer, getCampaignChannelName, PUSHER_EVENTS } from '@/lib/pusher'
+import { eq, and, desc } from 'drizzle-orm'
 
 // GET message history for a campaign
 export async function GET(
@@ -18,7 +17,6 @@ export async function GET(
     const { campaignId } = await params
     const { searchParams } = new URL(request.url)
     const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100)
-    const before = searchParams.get('before') // For pagination - messages before this timestamp
 
     // Check campaign membership
     const membership = await db.query.campaignMembers.findFirst({
@@ -135,6 +133,7 @@ export async function POST(
     }
 
     // Insert the message
+    // Supabase Realtime will automatically broadcast the INSERT to subscribers
     const [newMessage] = await db.insert(messages).values({
       campaignId,
       userId: session.user.id,
@@ -164,19 +163,6 @@ export async function POST(
         name: user?.name || 'Unknown',
         image: user?.image || null,
       },
-    }
-
-    // Broadcast via Pusher
-    try {
-      const pusher = getPusherServer()
-      await pusher.trigger(
-        getCampaignChannelName(campaignId),
-        PUSHER_EVENTS.NEW_MESSAGE,
-        messagePayload
-      )
-    } catch (pusherError) {
-      // Log but don't fail the request - message is saved
-      console.error('[Messages POST] Pusher error:', pusherError)
     }
 
     return NextResponse.json(messagePayload, { status: 201 })

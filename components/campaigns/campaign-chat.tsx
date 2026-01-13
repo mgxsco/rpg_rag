@@ -7,9 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { MessageSquare, Send, Loader2, User, Theater, Quote } from 'lucide-react'
-import { getPusherClient, getCampaignChannelName, PUSHER_EVENTS } from '@/lib/pusher'
+import { getSupabaseClient, getCampaignChannelName } from '@/lib/supabase'
 
 interface ChatMessage {
   id: string
@@ -34,6 +33,7 @@ export function CampaignChat({ campaignId, currentUserId }: CampaignChatProps) {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [realtimeConnected, setRealtimeConnected] = useState(false)
 
   // Message input state
   const [messageContent, setMessageContent] = useState('')
@@ -79,32 +79,66 @@ export function CampaignChat({ campaignId, currentUserId }: CampaignChatProps) {
     }
   }, [loading, scrollToBottom])
 
-  // Subscribe to Pusher channel for real-time updates
+  // Subscribe to Supabase Realtime for new messages
   useEffect(() => {
-    let pusher: ReturnType<typeof getPusherClient> | null = null
-    let channel: ReturnType<ReturnType<typeof getPusherClient>['subscribe']> | null = null
+    let channel: ReturnType<ReturnType<typeof getSupabaseClient>['channel']> | null = null
 
     try {
-      pusher = getPusherClient()
-      channel = pusher.subscribe(getCampaignChannelName(campaignId))
+      const supabase = getSupabaseClient()
+      channel = supabase.channel(getCampaignChannelName(campaignId))
 
-      channel.bind(PUSHER_EVENTS.NEW_MESSAGE, (newMessage: ChatMessage) => {
-        setMessages((prev) => {
-          // Avoid duplicates
-          if (prev.some((m) => m.id === newMessage.id)) {
-            return prev
+      channel
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `campaign_id=eq.${campaignId}`,
+          },
+          async (payload) => {
+            // The payload contains the raw database row
+            // We need to fetch user info separately since it's not included
+            const newRow = payload.new as {
+              id: string
+              content: string
+              message_type: string
+              character_name: string | null
+              created_at: string
+              user_id: string
+            }
+
+            // Fetch user info for the new message
+            const res = await fetch(`/api/campaigns/${campaignId}/messages?limit=1`)
+            if (res.ok) {
+              const data = await res.json()
+              const latestMessage = data.messages.find((m: ChatMessage) => m.id === newRow.id)
+
+              if (latestMessage) {
+                setMessages((prev) => {
+                  // Avoid duplicates
+                  if (prev.some((m) => m.id === latestMessage.id)) {
+                    return prev
+                  }
+                  return [...prev, latestMessage]
+                })
+                setTimeout(scrollToBottom, 100)
+              }
+            }
           }
-          return [...prev, newMessage]
+        )
+        .subscribe((status) => {
+          setRealtimeConnected(status === 'SUBSCRIBED')
+          if (status === 'CHANNEL_ERROR') {
+            console.error('Supabase realtime channel error')
+          }
         })
-        setTimeout(scrollToBottom, 100)
-      })
     } catch (err) {
-      console.error('Pusher connection error:', err)
+      console.error('Supabase realtime connection error:', err)
     }
 
     return () => {
       if (channel) {
-        channel.unbind_all()
         channel.unsubscribe()
       }
     }
@@ -127,8 +161,17 @@ export function CampaignChat({ campaignId, currentUserId }: CampaignChatProps) {
       })
 
       if (res.ok) {
+        const newMessage = await res.json()
+        // Add message immediately (Supabase will also notify, but we check for duplicates)
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === newMessage.id)) {
+            return prev
+          }
+          return [...prev, newMessage]
+        })
         setMessageContent('')
         inputRef.current?.focus()
+        setTimeout(scrollToBottom, 100)
       } else {
         const data = await res.json()
         setError(data.error || 'Failed to send message')
@@ -179,6 +222,9 @@ export function CampaignChat({ campaignId, currentUserId }: CampaignChatProps) {
         <CardTitle className="text-lg flex items-center gap-2">
           <MessageSquare className="h-5 w-5 text-[hsl(45_80%_45%)]" />
           Party Chat
+          {realtimeConnected && (
+            <span className="w-2 h-2 bg-green-500 rounded-full" title="Connected" />
+          )}
         </CardTitle>
       </CardHeader>
 

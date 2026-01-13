@@ -1,4 +1,4 @@
-import { sql } from '@vercel/postgres'
+import { sql } from '@/lib/db'
 import { generateEmbedding } from './embeddings'
 import { SearchResult } from '@/lib/types'
 
@@ -45,7 +45,7 @@ export async function searchSimilarChunks(
 
     // Search entity chunks
     console.log('[RAG] Running vector search on entity chunks with threshold:', threshold)
-    const entityResult = await sql`
+    const entityRows = await sql`
       SELECT
         e.id as entity_id,
         e.name as entity_name,
@@ -63,9 +63,9 @@ export async function searchSimilarChunks(
       LIMIT ${limit}
     `
 
-    console.log('[RAG] Entity chunks found:', entityResult.rows?.length || 0)
+    console.log('[RAG] Entity chunks found:', entityRows.length)
 
-    for (const row of entityResult.rows || []) {
+    for (const row of entityRows) {
       allResults.push({
         entity_id: row.entity_id,
         entity_name: row.entity_name,
@@ -83,7 +83,7 @@ export async function searchSimilarChunks(
     // Search note embeddings if enabled
     if (includeNotes) {
       console.log('[RAG] Running vector search on note embeddings...')
-      const noteResult = await sql`
+      const noteRows = await sql`
         SELECT
           n.id as note_id,
           n.title as note_title,
@@ -101,9 +101,9 @@ export async function searchSimilarChunks(
         LIMIT ${limit}
       `
 
-      console.log('[RAG] Note embeddings found:', noteResult.rows?.length || 0)
+      console.log('[RAG] Note embeddings found:', noteRows.length)
 
-      for (const row of noteResult.rows || []) {
+      for (const row of noteRows) {
         allResults.push({
           entity_id: row.note_id,
           entity_name: row.note_title,
