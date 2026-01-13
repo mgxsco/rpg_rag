@@ -630,6 +630,7 @@ export const entitiesRelations = relations(entities, ({ one, many }) => ({
   sources: many(entitySources),
   chunks: many(chunks),
   versions: many(entityVersions),
+  comments: many(entityComments),
   outgoingRelationships: many(relationships, { relationName: 'sourceEntity' }),
   incomingRelationships: many(relationships, { relationName: 'targetEntity' }),
 }))
@@ -717,3 +718,40 @@ export type SessionStatus = 'planned' | 'completed' | 'cancelled'
 // Chat types
 export type Message = typeof messages.$inferSelect
 export type MessageType = (typeof messageTypeEnum)[number]
+
+// ============================================
+// Entity Comments
+// ============================================
+
+export const entityComments = pgTable(
+  'entity_comments',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    entityId: uuid('entity_id')
+      .notNull()
+      .references(() => entities.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    content: text('content').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    entityIdx: index('entity_comments_entity_idx').on(table.entityId),
+    createdIdx: index('entity_comments_created_idx').on(table.entityId, table.createdAt),
+  })
+)
+
+export const entityCommentsRelations = relations(entityComments, ({ one }) => ({
+  entity: one(entities, {
+    fields: [entityComments.entityId],
+    references: [entities.id],
+  }),
+  user: one(users, {
+    fields: [entityComments.userId],
+    references: [users.id],
+  }),
+}))
+
+export type EntityComment = typeof entityComments.$inferSelect

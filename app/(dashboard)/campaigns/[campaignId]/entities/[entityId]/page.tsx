@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
 import { MarkdownRenderer } from '@/components/editor/markdown-renderer'
 import { EntityDetailActions } from '@/components/entities/entity-detail-actions'
+import { EntityComments } from '@/components/entities/entity-comments'
 import {
   Edit,
   Lock,
@@ -325,7 +326,7 @@ export default async function EntityViewPage({
 
           {/* Source Documents */}
           {sources.length > 0 && (
-            <Card>
+            <Card className="mb-4">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <span className="section-ornament">📜</span>
@@ -351,6 +352,13 @@ export default async function EntityViewPage({
               </CardContent>
             </Card>
           )}
+
+          {/* Comments Section */}
+          <EntityComments
+            entityId={params.entityId}
+            currentUserId={session.user.id}
+            isDM={isDM}
+          />
         </article>
       </div>
     </div>
