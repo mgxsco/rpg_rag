@@ -2,7 +2,7 @@ import postgres from 'postgres'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import * as schema from './schema'
 
-const connectionString = process.env.DATABASE_URL!
+const connectionString = process.env.DATABASE_POSTGRES_URL!
 
 // Create postgres client
 // For serverless environments, we need to configure the connection appropriately
