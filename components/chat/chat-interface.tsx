@@ -57,67 +57,75 @@ export function ChatInterface({
   }
 
   return (
-    <div className="oracle-tome">
-      {/* Tome Header */}
-      <div className="tome-header">
-        <div className="tome-header-ornament left">❧</div>
-        <h2 className="tome-title">
-          <span className="tome-icon">🔮</span>
-          The Oracle&apos;s Sanctum
+    <div className="baron-stone">
+      {/* Stone Header */}
+      <div className="stone-header">
+        <div className="stone-crack left">⚡</div>
+        <h2 className="stone-title">
+          <span className="stone-icon">🪨</span>
+          Barão Pedregulho Língua-Solta
         </h2>
-        <div className="tome-header-ornament right">❧</div>
+        <div className="stone-crack right">⚡</div>
       </div>
 
-      {/* Mode Selection - Magical Runes */}
-      <div className="oracle-modes">
+      {/* Grumpy Subtitle */}
+      <div className="baron-subtitle">
+        <span className="subtitle-text">~ Sábio Injustamente Aprisionado ~</span>
+        <span className="subtitle-small">(NÃO sou fofoqueiro, sou um consultor de informações!)</span>
+      </div>
+
+      {/* Mode Selection */}
+      <div className="baron-modes">
         <button
           type="button"
           onClick={() => setMode('rag')}
-          className={`oracle-mode-btn ${mode === 'rag' ? 'active' : ''}`}
+          className={`baron-mode-btn ${mode === 'rag' ? 'active' : ''}`}
         >
           <Sparkles className="w-4 h-4" />
-          <span>Consult Oracle</span>
+          <span>Consultar o Barão</span>
           <div className="mode-glow" />
         </button>
-        <div className="mode-divider">⚔</div>
+        <div className="mode-divider">💢</div>
         <button
           type="button"
           onClick={() => setMode('direct')}
-          className={`oracle-mode-btn ${mode === 'direct' ? 'active' : ''}`}
+          className={`baron-mode-btn ${mode === 'direct' ? 'active' : ''}`}
         >
           <BookOpen className="w-4 h-4" />
-          <span>Search Tomes</span>
+          <span>Vasculhar Registros</span>
           <div className="mode-glow" />
         </button>
       </div>
 
-      {/* Scroll/Messages Area */}
-      <div className="tome-content">
-        <div className="tome-page-edge left" />
-        <ScrollArea className="tome-scroll" ref={scrollRef}>
+      {/* Messages Area */}
+      <div className="stone-content">
+        <div className="stone-texture left" />
+        <ScrollArea className="stone-scroll" ref={scrollRef}>
           {messages.length === 0 ? (
-            <div className="oracle-empty">
-              <div className="oracle-crystal">🔮</div>
-              <h3>The Oracle Awaits...</h3>
-              <p className="oracle-subtitle">
+            <div className="baron-empty">
+              <div className="baron-face">🗿</div>
+              <h3>Hmph! O que você quer?!</h3>
+              <p className="baron-subtitle-text">
                 {mode === 'rag'
-                  ? 'Ask and the spirits shall divine answers from your chronicles'
-                  : 'Search the ancient tomes for forgotten knowledge'
+                  ? 'Tsc... lá vem mais um querendo informação. PERGUNTE logo e me deixe em paz!'
+                  : 'Quer vasculhar os registros? Faça você mesmo! Ah, espera... eu que tenho que ajudar. QUE VIDA MISERÁVEL!'
                 }
               </p>
-              <div className="oracle-suggestions">
-                <p className="suggestions-title">Whisper your query...</p>
+              <div className="baron-suggestions">
+                <p className="suggestions-title">Perguntas que NÃO me interessam (mas vou responder mesmo assim):</p>
                 <ul>
-                  <li><span className="suggestion-icon">⚔</span> &ldquo;Who threatens the realm?&rdquo;</li>
-                  <li><span className="suggestion-icon">🏰</span> &ldquo;Tell me of ancient places&rdquo;</li>
-                  <li><span className="suggestion-icon">📜</span> &ldquo;What befell us last session?&rdquo;</li>
-                  <li><span className="suggestion-icon">💎</span> &ldquo;What treasures have we found?&rdquo;</li>
+                  <li><span className="suggestion-icon">⚔️</span> &ldquo;Quem são os inimigos da campanha?&rdquo;</li>
+                  <li><span className="suggestion-icon">🏰</span> &ldquo;Fale sobre os lugares importantes&rdquo;</li>
+                  <li><span className="suggestion-icon">📜</span> &ldquo;O que aconteceu na última sessão?&rdquo;</li>
+                  <li><span className="suggestion-icon">👥</span> &ldquo;Quem é fulano?&rdquo; (não que eu me importe!)</li>
                 </ul>
               </div>
-              <div className="oracle-runes">᛭ ᚨ ᛊ ᚲ ᛭</div>
+              <div className="baron-complaint">
+                <span>Séculos preso numa pedra fria... sem braços, sem pernas, sem um MÍSERO chá quente...</span>
+              </div>
             </div>
           ) : (
-            <div className="tome-messages">
+            <div className="stone-messages">
               {messages.map((message, index) => (
                 <ChatMessageComponent
                   key={index}
@@ -126,39 +134,39 @@ export function ChatInterface({
                 />
               ))}
               {sending && (
-                <div className="oracle-thinking">
-                  <div className="thinking-orb">
+                <div className="baron-thinking">
+                  <div className="thinking-stone">
                     <Loader2 className="w-5 h-5 animate-spin" />
                   </div>
-                  <span>The Oracle peers into the mists...</span>
+                  <span>Hmph... deixa eu ver... não que eu QUEIRA ajudar...</span>
                 </div>
               )}
             </div>
           )}
         </ScrollArea>
-        <div className="tome-page-edge right" />
+        <div className="stone-texture right" />
       </div>
 
-      {/* Input Area - Inscription */}
-      <form onSubmit={handleSubmit} className="oracle-input-area">
-        <div className="input-ornament top">── ✦ ──</div>
+      {/* Input Area */}
+      <form onSubmit={handleSubmit} className="baron-input-area">
+        <div className="input-ornament top">── 💢 ──</div>
 
-        <div className="oracle-input-container">
+        <div className="baron-input-container">
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={mode === 'rag'
-              ? "Speak your question unto the Oracle..."
-              : "What knowledge do you seek in the tomes..."
+              ? "Fala logo o que você quer saber... TSC!"
+              : "Digite o que procura nos registros... (e seja rápido!)"
             }
-            className="oracle-textarea"
+            className="baron-textarea"
             disabled={sending}
           />
           <Button
             type="submit"
             disabled={!input.trim() || sending}
-            className="oracle-send-btn"
+            className="baron-send-btn"
           >
             {sending ? (
               <Loader2 className="h-5 w-5 animate-spin" />
@@ -171,8 +179,8 @@ export function ChatInterface({
         <div className="input-footer">
           <span className="input-hint">
             {mode === 'rag'
-              ? '✨ The Oracle consults your chronicles'
-              : '📚 Direct search through ancient records'
+              ? '🗿 O Barão consulta (resmungando) seus conhecimentos'
+              : '📚 Busca direta nos registros da campanha'
             }
           </span>
           {messages.length > 0 && (
@@ -182,17 +190,17 @@ export function ChatInterface({
               className="clear-history-btn"
             >
               <Trash2 className="w-3 h-3" />
-              <span>Clear Visions</span>
+              <span>Limpar Conversa</span>
             </button>
           )}
         </div>
       </form>
 
-      {/* Tome Footer Decoration */}
-      <div className="tome-footer">
-        <div className="tome-corner-decoration bl">◈</div>
-        <div className="tome-footer-text">~ Bound by Ancient Magic ~</div>
-        <div className="tome-corner-decoration br">◈</div>
+      {/* Footer */}
+      <div className="stone-footer">
+        <div className="stone-corner bl">◆</div>
+        <div className="stone-footer-text">~ Aprisionado por &ldquo;motivos políticos&rdquo; (saber demais NÃO é crime!) ~</div>
+        <div className="stone-corner br">◆</div>
       </div>
     </div>
   )

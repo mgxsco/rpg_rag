@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth'
-import { db, campaigns, campaignMembers, entities, relationships, entitySources } from '@/lib/db'
+import { db, campaigns, campaignMembers, entities, relationships, entitySources, users } from '@/lib/db'
 import { eq, and, or } from 'drizzle-orm'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -17,6 +17,7 @@ import {
   Link as LinkIcon,
   FileText,
   ArrowRight,
+  User,
 } from 'lucide-react'
 
 export default async function EntityViewPage({
@@ -47,6 +48,20 @@ export default async function EntityViewPage({
       eq(entities.id, params.entityId),
       eq(entities.campaignId, params.campaignId)
     ),
+    with: {
+      player: {
+        with: {
+          user: {
+            columns: {
+              id: true,
+              name: true,
+              email: true,
+              image: true,
+            },
+          },
+        },
+      },
+    },
   })
 
   if (!entity) {
@@ -135,42 +150,51 @@ export default async function EntityViewPage({
   )
 
   return (
-    <div className="flex gap-6">
+    <div className="flex gap-3 sm:gap-4 md:gap-5">
       <CampaignSidebar campaignId={params.campaignId} isDM={isDM} />
 
-      <div className="flex-1 max-w-4xl">
+      <div className="flex-1 max-w-5xl">
         <Link
           href={`/campaigns/${params.campaignId}/entities`}
-          className="inline-flex items-center text-muted-foreground hover:text-foreground mb-6"
+          className="inline-flex items-center text-muted-foreground hover:text-foreground mb-4"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to wiki
         </Link>
 
         <article>
-          <header className="mb-6">
+          {/* Header Ornament */}
+          <div className="header-ornament">
+            <span>◆━━</span>
+            <span className="ornament-center">⚜</span>
+            <span>━━◆</span>
+          </div>
+
+          <header className="mb-4">
             <div className="flex items-start justify-between gap-4 mb-4">
               <div>
-                <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
+                <h1 className="entity-detail-title text-3xl font-bold mb-2 flex items-center gap-2">
                   {entity.name}
                   {entity.isDmOnly && (
-                    <Lock className="h-5 w-5 text-muted-foreground" />
+                    <Lock className="dm-lock-icon h-5 w-5" />
                   )}
                 </h1>
-                <div className="flex flex-wrap gap-2 mb-2">
-                  <Badge variant="outline">
-                    {entity.entityType.replace('_', ' ')}
-                  </Badge>
-                  {entity.tags?.map((tag) => (
-                    <Badge key={tag} variant="secondary">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
+                <Badge variant="outline" className="entity-type-badge mb-2">
+                  {entity.entityType.replace('_', ' ')}
+                </Badge>
                 {entity.aliases && entity.aliases.length > 0 && (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground italic">
                     Also known as: {entity.aliases.join(', ')}
                   </p>
+                )}
+                {entity.entityType === 'player_character' && entity.player && (
+                  <div className="flex items-center gap-2 mt-2 text-sm">
+                    <User className="h-4 w-4 text-primary" />
+                    <span className="text-muted-foreground">Played by:</span>
+                    <span className="font-medium">
+                      {entity.player.user.name || entity.player.user.email}
+                    </span>
+                  </div>
                 )}
               </div>
               {isDM && (
@@ -184,9 +208,12 @@ export default async function EntityViewPage({
             <p className="text-sm text-muted-foreground">
               Last updated {new Date(entity.updatedAt).toLocaleString()}
             </p>
+
+            {/* Gold separator */}
+            <div className="separator-gold my-4" />
           </header>
 
-          <Card className="mb-6">
+          <Card className="mb-4">
             <CardContent className="pt-6 prose prose-sm dark:prose-invert max-w-none">
               <MarkdownRenderer
                 content={entity.content || ''}
@@ -199,10 +226,10 @@ export default async function EntityViewPage({
 
           {/* Relationships */}
           {outgoingRels.length > 0 && (
-            <Card className="mb-6">
+            <Card className="mb-4">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <ArrowRight className="h-5 w-5" />
+                  <span className="section-ornament">⚔</span>
                   Relationships
                 </CardTitle>
               </CardHeader>
@@ -232,10 +259,10 @@ export default async function EntityViewPage({
 
           {/* Backlinks (Incoming Relationships) */}
           {(incomingRels.length > 0 || contentBacklinks.length > 0) && (
-            <Card className="mb-6">
+            <Card className="mb-4">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <LinkIcon className="h-5 w-5" />
+                  <span className="section-ornament">🔗</span>
                   Backlinks
                 </CardTitle>
               </CardHeader>
@@ -301,7 +328,7 @@ export default async function EntityViewPage({
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
+                  <span className="section-ornament">📜</span>
                   Sources
                 </CardTitle>
               </CardHeader>

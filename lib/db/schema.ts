@@ -276,6 +276,7 @@ export const campaignsRelations = relations(campaigns, ({ one, many }) => ({
   }),
   members: many(campaignMembers),
   invites: many(campaignInvites),
+  messages: many(messages),
   notes: many(notes),
 }))
 
@@ -297,6 +298,44 @@ export const campaignInvitesRelations = relations(campaignInvites, ({ one }) => 
   }),
   creator: one(users, {
     fields: [campaignInvites.createdBy],
+    references: [users.id],
+  }),
+}))
+
+// ============================================
+// Chat Messages
+// ============================================
+
+export const messageTypeEnum = ['ooc', 'ic', 'system'] as const
+
+export const messages = pgTable(
+  'messages',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    content: text('content').notNull(),
+    messageType: text('message_type', { enum: ['ooc', 'ic', 'system'] }).notNull().default('ooc'),
+    characterName: text('character_name'), // For IC messages
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    campaignTimeIdx: index('messages_campaign_time_idx').on(table.campaignId, table.createdAt),
+  })
+)
+
+export const messagesRelations = relations(messages, ({ one }) => ({
+  campaign: one(campaigns, {
+    fields: [messages.campaignId],
+    references: [campaigns.id],
+  }),
+  user: one(users, {
+    fields: [messages.userId],
     references: [users.id],
   }),
 }))
@@ -429,6 +468,15 @@ export const entities = pgTable(
 
     // Original note reference (for migration)
     sourceNoteId: uuid('source_note_id').references(() => notes.id),
+
+    // Session-specific fields (only used when entityType = 'session')
+    sessionNumber: integer('session_number'),
+    sessionDate: timestamp('session_date', { mode: 'date' }),
+    inGameDate: text('in_game_date'),
+    sessionStatus: text('session_status'), // 'planned' | 'completed' | 'cancelled'
+
+    // Player character ownership (only used when entityType = 'player_character')
+    playerId: uuid('player_id').references(() => campaignMembers.id, { onDelete: 'set null' }),
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -575,6 +623,10 @@ export const entitiesRelations = relations(entities, ({ one, many }) => ({
     fields: [entities.sourceNoteId],
     references: [notes.id],
   }),
+  player: one(campaignMembers, {
+    fields: [entities.playerId],
+    references: [campaignMembers.id],
+  }),
   sources: many(entitySources),
   chunks: many(chunks),
   versions: many(entityVersions),
@@ -660,3 +712,8 @@ export type Chunk = typeof chunks.$inferSelect
 export type EntityVersion = typeof entityVersions.$inferSelect
 export type EntityType = Entity['entityType']
 export type RelationshipType = (typeof relationshipTypeEnum)[number]
+export type SessionStatus = 'planned' | 'completed' | 'cancelled'
+
+// Chat types
+export type Message = typeof messages.$inferSelect
+export type MessageType = (typeof messageTypeEnum)[number]

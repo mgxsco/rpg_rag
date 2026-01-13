@@ -69,7 +69,7 @@ export function EntityToolbar({ campaignId, view, sort, search }: EntityToolbarP
   }
 
   return (
-    <div className="flex flex-col sm:flex-row gap-3 mb-6">
+    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-3 sm:mb-4">
       {/* View Toggle */}
       <div className="flex gap-1 p-1 bg-muted rounded-lg">
         <Button

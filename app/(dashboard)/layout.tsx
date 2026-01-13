@@ -19,7 +19,7 @@ export default async function DashboardLayout({
   return (
     <div className="min-h-screen bg-background">
       <DashboardNav user={session.user} profile={user} />
-      <main className="container mx-auto px-4 py-8 pb-24 md:pb-8">
+      <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-20 md:pb-6">
         {children}
       </main>
       <MobileTabBar />

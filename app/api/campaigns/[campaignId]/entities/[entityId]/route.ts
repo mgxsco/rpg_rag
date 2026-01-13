@@ -58,12 +58,26 @@ export async function GET(
     return NextResponse.json({ error: access.error }, { status: access.status })
   }
 
-  // Get the entity
+  // Get the entity with player info
   const entity = await db.query.entities.findFirst({
     where: and(
       eq(entities.id, params.entityId),
       eq(entities.campaignId, params.campaignId)
     ),
+    with: {
+      player: {
+        with: {
+          user: {
+            columns: {
+              id: true,
+              name: true,
+              email: true,
+              image: true,
+            },
+          },
+        },
+      },
+    },
   })
 
   if (!entity) {
@@ -210,7 +224,7 @@ export async function PUT(
   }
 
   const body = await request.json()
-  const { name, content, aliases, tags, isDmOnly } = body
+  const { name, entityType, content, aliases, tags, isDmOnly, playerId } = body
 
   // Save current version before updating
   await db.insert(entityVersions).values({
@@ -244,16 +258,23 @@ export async function PUT(
     }
   }
 
+  // Determine the final entity type
+  const finalEntityType = entityType || entity.entityType
+
   // Update the entity
   const [updated] = await db
     .update(entities)
     .set({
       name: name || entity.name,
       canonicalName,
+      entityType: finalEntityType,
       content: content !== undefined ? content : entity.content,
       aliases: aliases !== undefined ? aliases : entity.aliases,
       tags: tags !== undefined ? tags : entity.tags,
       isDmOnly: isDmOnly !== undefined ? isDmOnly : entity.isDmOnly,
+      playerId: finalEntityType === 'player_character'
+        ? (playerId !== undefined ? playerId : entity.playerId)
+        : null,
       updatedAt: new Date(),
     })
     .where(eq(entities.id, params.entityId))

@@ -108,7 +108,7 @@ export async function POST(
   }
 
   const body = await request.json()
-  const { name, entityType, content, aliases, tags, isDmOnly } = body
+  const { name, entityType, content, aliases, tags, isDmOnly, playerId } = body
 
   if (!name) {
     return NextResponse.json({ error: 'Name is required' }, { status: 400 })
@@ -150,6 +150,7 @@ export async function POST(
       aliases: aliases || [],
       tags: tags || [],
       isDmOnly: isDmOnly || false,
+      playerId: entityType === 'player_character' ? playerId || null : null,
     })
     .returning()
 

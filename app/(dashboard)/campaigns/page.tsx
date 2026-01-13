@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Plus, Users, BookOpen } from 'lucide-react'
 import { ensureCampaignLanguageColumn, ensureCampaignSettingsColumn, ensureCampaignMembersJoinedAt } from '@/lib/db/migrations'
+import { ImportDialog } from '@/components/campaigns/import-dialog'
 
 export default async function CampaignsPage() {
   const session = await getSession()
@@ -60,12 +61,15 @@ export default async function CampaignsPage() {
           <h1 className="text-3xl font-bold">Your Campaigns</h1>
           <p className="text-muted-foreground mt-1">Manage your D&D adventures</p>
         </div>
-        <Link href="/campaigns/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            New Campaign
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <ImportDialog />
+          <Link href="/campaigns/new">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              New Campaign
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {allCampaigns.length === 0 ? (

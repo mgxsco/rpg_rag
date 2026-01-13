@@ -12,6 +12,8 @@ import {
   ArrowLeft,
   BookOpen,
   ScrollText,
+  CalendarDays,
+  Users,
 } from 'lucide-react'
 
 interface CampaignSidebarProps {
@@ -35,6 +37,11 @@ export function CampaignSidebar({ campaignId, isDM }: CampaignSidebarProps) {
       icon: BookOpen,
     },
     {
+      href: `/campaigns/${campaignId}/sessions`,
+      label: 'Sessions',
+      icon: CalendarDays,
+    },
+    {
       href: `/campaigns/${campaignId}/notes`,
       label: 'Notes',
       icon: ScrollText,
@@ -45,8 +52,13 @@ export function CampaignSidebar({ campaignId, isDM }: CampaignSidebarProps) {
       icon: Network,
     },
     {
+      href: `/campaigns/${campaignId}/party-chat`,
+      label: 'Party Chat',
+      icon: Users,
+    },
+    {
       href: `/campaigns/${campaignId}/chat`,
-      label: 'Oracle',
+      label: 'Barão Pedregulho',
       icon: MessageSquare,
     },
     ...(isDM
@@ -61,8 +73,8 @@ export function CampaignSidebar({ campaignId, isDM }: CampaignSidebarProps) {
   ]
 
   return (
-    <aside className="hidden md:block w-64 shrink-0">
-      <div className="sticky top-24 space-y-4 p-4 rounded-sm border-2 border-border bg-gradient-to-b from-card to-[hsl(35_25%_88%)] shadow-lg relative">
+    <aside className="hidden md:block w-52 lg:w-56 xl:w-60 shrink-0">
+      <div className="sticky top-20 space-y-2 sm:space-y-3 p-2 sm:p-3 rounded-sm border-2 border-border bg-gradient-to-b from-card to-[hsl(35_25%_88%)] shadow-lg relative">
         {/* Decorative corner ornaments */}
         <div className="absolute top-1 left-1 w-3 h-3 border-t-2 border-l-2 border-[hsl(45_80%_45%)] opacity-60" />
         <div className="absolute top-1 right-1 w-3 h-3 border-t-2 border-r-2 border-[hsl(45_80%_45%)] opacity-60" />
@@ -79,7 +91,7 @@ export function CampaignSidebar({ campaignId, isDM }: CampaignSidebarProps) {
         {/* Gold separator */}
         <div className="h-px w-full bg-gradient-to-r from-transparent via-[hsl(45_80%_45%)] to-transparent opacity-50" />
 
-        <nav className="space-y-1">
+        <nav className="space-y-0.5">
           {links.map((link) => {
             const isActive = link.exact
               ? pathname === link.href

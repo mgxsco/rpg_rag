@@ -104,12 +104,12 @@ export default async function EntitiesPage({
   }
 
   return (
-    <div className="flex flex-col md:flex-row gap-6">
+    <div className="flex flex-col md:flex-row gap-3 sm:gap-4 md:gap-5">
       <CampaignSidebar campaignId={campaignId} isDM={isDM} />
 
-      <div className="flex-1 pb-20 md:pb-0">
+      <div className="flex-1 pb-16 md:pb-0">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
             <h1 className="text-2xl font-bold">Wiki</h1>
             <p className="text-muted-foreground">
@@ -150,8 +150,8 @@ export default async function EntitiesPage({
 
         {/* Content */}
         {migrationNeeded ? (
-          <div className="text-center py-12">
-            <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-yellow-500" />
+          <div className="text-center py-8">
+            <AlertTriangle className="h-10 w-10 mx-auto mb-3 text-yellow-500" />
             <h3 className="text-lg font-medium mb-2">Database Migration Required</h3>
             <p className="text-muted-foreground mb-4">
               The knowledge graph tables need to be created. Please run the migration.
@@ -163,32 +163,34 @@ export default async function EntitiesPage({
         ) : allEntities.length > 0 ? (
           view === 'list' ? (
             // List View
-            <div className="border rounded-lg divide-y">
-              {allEntities.map((entity) => (
+            <div className="border rounded-lg divide-y overflow-hidden">
+              {allEntities.map((entity, index) => (
                 <EntityListRow
                   key={entity.id}
                   entity={entity}
                   campaignId={campaignId}
                   isDM={isDM}
+                  index={index}
                 />
               ))}
             </div>
           ) : (
             // Grid View
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {allEntities.map((entity) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
+              {allEntities.map((entity, index) => (
                 <EntityCard
                   key={entity.id}
                   entity={entity}
                   campaignId={campaignId}
                   isDM={isDM}
+                  index={index}
                 />
               ))}
             </div>
           )
         ) : (
-          <div className="text-center py-12 text-muted-foreground">
-            <Filter className="h-12 w-12 mx-auto mb-4" />
+          <div className="text-center py-8 text-muted-foreground">
+            <Filter className="h-10 w-10 mx-auto mb-3" />
             <h3 className="text-lg font-medium mb-2">No entities found</h3>
             <p className="mb-4">
               {type || search

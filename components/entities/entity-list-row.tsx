@@ -9,6 +9,7 @@ import {
   getEntityTypeIcon,
   getEntityTypeBadgeClasses,
   getEntityTypeLabel,
+  getEntityTypeColor,
 } from '@/lib/entity-colors'
 import { EntityActions } from './entity-actions'
 
@@ -16,6 +17,7 @@ interface EntityListRowProps {
   entity: Entity
   campaignId: string
   isDM?: boolean
+  index?: number
 }
 
 function formatTimeAgo(date: Date): string {
@@ -36,41 +38,42 @@ function formatTimeAgo(date: Date): string {
   }
 }
 
-export function EntityListRow({ entity, campaignId, isDM = false }: EntityListRowProps) {
+export function EntityListRow({ entity, campaignId, isDM = false, index = 0 }: EntityListRowProps) {
   const Icon = getEntityTypeIcon(entity.entityType)
   const typeClasses = getEntityTypeBadgeClasses(entity.entityType)
+  const typeColors = getEntityTypeColor(entity.entityType)
 
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-transparent hover:border-border hover:bg-accent/50 transition-colors group">
+    <div className="entity-list-row group">
+      {/* Type indicator bar */}
+      <div
+        className="list-type-indicator"
+        style={{ backgroundColor: typeColors.hex }}
+      />
+
       {/* Clickable area for navigation */}
       <Link
         href={`/campaigns/${campaignId}/entities/${entity.id}`}
-        className="flex items-center gap-3 flex-1 min-w-0"
+        className="entity-list-link flex-1 min-w-0"
       >
-        {/* Icon + Name */}
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
-          <span className="font-medium truncate group-hover:text-primary transition-colors">
-            {entity.name}
-          </span>
-          {entity.isDmOnly && (
-            <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          )}
+        {/* Icon */}
+        <div className={cn("list-icon-wrapper", typeColors.bg)}>
+          <Icon className={cn("h-4 w-4", typeColors.text)} />
         </div>
 
+        {/* Name */}
+        <span className="list-entity-name truncate">
+          {entity.name}
+          {entity.isDmOnly && (
+            <Lock className="dm-lock-icon inline h-3.5 w-3.5 ml-1.5" />
+          )}
+        </span>
+
         {/* Type Badge */}
-        <Badge variant="outline" className={cn('shrink-0 text-xs', typeClasses)}>
+        <Badge variant="outline" className={cn('entity-type-badge shrink-0', typeClasses)}>
           {getEntityTypeLabel(entity.entityType)}
         </Badge>
 
-        {/* Tags (hidden on mobile) */}
-        <div className="hidden sm:flex gap-1 shrink-0 max-w-[120px]">
-          {entity.tags?.slice(0, 2).map((tag) => (
-            <Badge key={tag} variant="secondary" className="text-xs truncate max-w-[60px]">
-              {tag}
-            </Badge>
-          ))}
-        </div>
 
         {/* Updated time */}
         <span className="text-xs text-muted-foreground shrink-0 w-16 text-right">
@@ -78,8 +81,8 @@ export function EntityListRow({ entity, campaignId, isDM = false }: EntityListRo
         </span>
       </Link>
 
-      {/* Actions dropdown */}
-      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+      {/* Actions dropdown - visible on mobile, hover on desktop */}
+      <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity px-2">
         <EntityActions
           entityId={entity.id}
           entityName={entity.name}

@@ -9,6 +9,12 @@ import { Badge } from '@/components/ui/badge'
 import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
 import { PartyPanel } from '@/components/campaigns/party-panel'
 import { InviteModal } from '@/components/campaigns/invite-modal'
+import { CampaignSpotlight } from '@/components/campaigns/campaign-spotlight'
+import { SessionTimeline } from '@/components/campaigns/session-timeline'
+import { ActivityFeed } from '@/components/campaigns/activity-feed'
+import { MiniGraph } from '@/components/campaigns/mini-graph'
+import { PCCards } from '@/components/campaigns/pc-cards'
+import { QuestTracker } from '@/components/campaigns/quest-tracker'
 import {
   BookOpen,
   MessageSquare,
@@ -21,8 +27,10 @@ import {
   Crown,
   Globe,
   Calendar,
+  CalendarDays,
   Loader2,
   Settings,
+  ChevronRight,
 } from 'lucide-react'
 
 interface CampaignData {
@@ -52,36 +60,11 @@ interface CampaignData {
   userRole: string
 }
 
-interface EntityCount {
-  type: string
-  count: number
-}
-
-interface RecentEntity {
-  id: string
-  name: string
-  entityType: string
-  updatedAt: string
-}
-
-interface RecentDocument {
-  id: string
-  name: string
-  fileType: string | null
-  createdAt: string
-  uploadedBy: {
-    name: string | null
-  }
-}
-
 interface StatsData {
   entityCount: number
   relationshipCount: number
   documentCount: number
   memberCount: number
-  entityCounts: EntityCount[]
-  recentEntities: RecentEntity[]
-  recentDocuments: RecentDocument[]
 }
 
 export default function CampaignHomePage() {
@@ -101,7 +84,6 @@ export default function CampaignHomePage() {
   const loadData = async () => {
     setLoading(true)
     try {
-      // Load campaign data and stats in parallel
       const [campaignRes, statsRes] = await Promise.all([
         fetch(`/api/campaigns/${campaignId}`),
         fetch(`/api/campaigns/${campaignId}/stats`),
@@ -130,7 +112,7 @@ export default function CampaignHomePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role: newRole }),
       })
-      loadData() // Refresh data
+      loadData()
     } catch (error) {
       console.error('Failed to update role:', error)
     }
@@ -141,7 +123,7 @@ export default function CampaignHomePage() {
       await fetch(`/api/campaigns/${campaignId}/members/${userId}`, {
         method: 'DELETE',
       })
-      loadData() // Refresh data
+      loadData()
     } catch (error) {
       console.error('Failed to remove member:', error)
     }
@@ -160,9 +142,9 @@ export default function CampaignHomePage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col md:flex-row gap-6">
-        <div className="hidden md:block w-64 shrink-0" />
-        <div className="flex-1 flex items-center justify-center py-20">
+      <div className="flex flex-col md:flex-row gap-3 sm:gap-4 md:gap-5">
+        <div className="hidden md:block w-52 lg:w-56 xl:w-60 shrink-0" />
+        <div className="flex-1 flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       </div>
@@ -171,9 +153,9 @@ export default function CampaignHomePage() {
 
   if (!campaign) {
     return (
-      <div className="flex flex-col md:flex-row gap-6">
-        <div className="hidden md:block w-64 shrink-0" />
-        <div className="flex-1 text-center py-20">
+      <div className="flex flex-col md:flex-row gap-3 sm:gap-4 md:gap-5">
+        <div className="hidden md:block w-52 lg:w-56 xl:w-60 shrink-0" />
+        <div className="flex-1 text-center py-12">
           <p className="text-muted-foreground">Campaign not found</p>
         </div>
       </div>
@@ -182,9 +164,7 @@ export default function CampaignHomePage() {
 
   const isDM = campaign.isDM
 
-  // Prepare members for PartyPanel
   const partyMembers = [
-    // Add owner as DM
     {
       id: campaign.owner.id,
       userId: campaign.owner.id,
@@ -192,7 +172,6 @@ export default function CampaignHomePage() {
       userImage: campaign.owner.image,
       role: 'dm' as const,
     },
-    // Add other members (excluding owner if they're in members list)
     ...campaign.members
       .filter((m) => m.userId !== campaign.ownerId)
       .map((m) => ({
@@ -204,14 +183,13 @@ export default function CampaignHomePage() {
       })),
   ]
 
-  // Get current user ID from the API response
   const currentUserId = campaign.currentUserId
 
   return (
-    <div className="flex flex-col md:flex-row gap-6">
+    <div className="flex flex-col md:flex-row gap-3 sm:gap-4 md:gap-5">
       <CampaignSidebar campaignId={campaignId} isDM={isDM} />
 
-      <div className="flex-1 space-y-6">
+      <div className="flex-1 space-y-4 sm:space-y-5">
         {/* Campaign Header */}
         <div className="relative">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
@@ -250,21 +228,11 @@ export default function CampaignHomePage() {
           </div>
         </div>
 
-        {/* Party Panel */}
-        <PartyPanel
-          campaignId={campaignId}
-          members={partyMembers}
-          ownerId={campaign.ownerId}
-          currentUserId={currentUserId}
-          isDM={isDM}
-          onInvite={() => setInviteModalOpen(true)}
-          onRoleChange={isDM ? handleRoleChange : undefined}
-          onRemoveMember={isDM ? handleRemoveMember : undefined}
-          onLeave={!isDM ? handleLeaveCampaign : undefined}
-        />
+        {/* Campaign Spotlight - AI Summary */}
+        <CampaignSpotlight campaignId={campaignId} />
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
           <StatCard
             icon={<BookOpen className="h-5 w-5" />}
             label="Wiki Entries"
@@ -291,158 +259,72 @@ export default function CampaignHomePage() {
           />
         </div>
 
-        {/* Two Column Layout */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Left Column */}
-          <div className="space-y-6">
-            {/* Quick Actions */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Scroll className="h-5 w-5 text-[hsl(45_80%_45%)]" />
-                  Adventurer's Toolkit
-                </CardTitle>
-                <CardDescription>Common tasks for your campaign</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Link href={`/campaigns/${campaignId}/entities?upload=true`}>
-                  <Button variant="outline" className="w-full justify-start">
-                    <Upload className="h-4 w-4 mr-2" />
-                    Upload Documents
-                  </Button>
-                </Link>
-                <Link href={`/campaigns/${campaignId}/entities/new`}>
-                  <Button variant="outline" className="w-full justify-start">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Wiki Entry
-                  </Button>
-                </Link>
-                <Link href={`/campaigns/${campaignId}/chat`}>
-                  <Button variant="outline" className="w-full justify-start">
-                    <MessageSquare className="h-4 w-4 mr-2" />
-                    Consult the Oracle (AI)
-                  </Button>
-                </Link>
-                <Link href={`/campaigns/${campaignId}/graph`}>
-                  <Button variant="outline" className="w-full justify-start">
-                    <Network className="h-4 w-4 mr-2" />
-                    View Knowledge Graph
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
+        {/* Session Timeline */}
+        <SessionTimeline campaignId={campaignId} isDM={isDM} />
 
-            {/* Recent Documents */}
-            {stats && stats.recentDocuments.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-[hsl(45_80%_45%)]" />
-                    Archived Scrolls
-                  </CardTitle>
-                  <CardDescription>Recently uploaded documents</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {stats.recentDocuments.map((doc) => (
-                      <div
-                        key={doc.id}
-                        className="flex items-center justify-between p-2 rounded hover:bg-muted/50 transition-colors"
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Scroll className="h-4 w-4 text-muted-foreground shrink-0" />
-                          <span className="font-medium truncate">{doc.name}</span>
-                        </div>
-                        <span className="text-xs text-muted-foreground shrink-0 ml-2">
-                          {new Date(doc.createdAt).toLocaleDateString()}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* Right Column */}
-          <div className="space-y-6">
-            {/* Wiki Summary */}
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <BookOpen className="h-5 w-5 text-[hsl(45_80%_45%)]" />
-                    Compendium
-                  </CardTitle>
-                  <CardDescription>Your campaign knowledge base</CardDescription>
-                </div>
-                <Link href={`/campaigns/${campaignId}/entities`}>
-                  <Button size="sm" variant="outline">
-                    Browse
-                  </Button>
-                </Link>
-              </CardHeader>
-              <CardContent>
-                {stats && stats.entityCounts.length > 0 ? (
-                  <div className="space-y-4">
-                    {/* Entity type breakdown */}
-                    <div className="space-y-2">
-                      {stats.entityCounts.slice(0, 5).map((item) => {
-                        const maxCount = Math.max(...stats.entityCounts.map((e) => e.count))
-                        const percentage = (item.count / maxCount) * 100
-                        return (
-                          <div key={item.type} className="space-y-1">
-                            <div className="flex justify-between text-sm">
-                              <span className="capitalize">
-                                {item.type.replace('_', ' ')}
-                              </span>
-                              <span className="text-muted-foreground">{item.count}</span>
-                            </div>
-                            <div className="h-2 bg-muted rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-gradient-to-r from-primary to-[hsl(45_80%_45%)] rounded-full transition-all"
-                                style={{ width: `${percentage}%` }}
-                              />
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-
-                    {/* Recent entities */}
-                    {stats.recentEntities.length > 0 && (
-                      <div className="pt-4 border-t">
-                        <h4 className="text-sm font-medium mb-2">Recently Updated</h4>
-                        <div className="space-y-1">
-                          {stats.recentEntities.map((entity) => (
-                            <Link
-                              key={entity.id}
-                              href={`/campaigns/${campaignId}/entities/${entity.id}`}
-                              className="flex items-center justify-between p-1.5 rounded hover:bg-muted/50 transition-colors text-sm"
-                            >
-                              <div className="flex items-center gap-2 min-w-0">
-                                <Badge variant="outline" className="shrink-0 text-xs">
-                                  {entity.entityType.replace('_', ' ')}
-                                </Badge>
-                                <span className="truncate">{entity.name}</span>
-                              </div>
-                            </Link>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <BookOpen className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p>No entries yet.</p>
-                    <p className="text-sm">Upload documents to extract entities automatically.</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+        {/* Two Column Layout: Activity Feed + Mini Graph */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+          <ActivityFeed campaignId={campaignId} limit={8} />
+          <MiniGraph campaignId={campaignId} />
         </div>
+
+        {/* Two Column Layout: PC Cards + Quest Tracker */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+          <PCCards campaignId={campaignId} />
+          <QuestTracker campaignId={campaignId} />
+        </div>
+
+        {/* Quick Actions */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Scroll className="h-5 w-5 text-[hsl(45_80%_45%)]" />
+              Quick Actions
+            </CardTitle>
+            <CardDescription>Common tasks for your campaign</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <Link href={`/campaigns/${campaignId}/entities?upload=true`}>
+                <Button variant="outline" className="w-full h-auto py-3 flex flex-col items-center gap-1">
+                  <Upload className="h-5 w-5" />
+                  <span className="text-xs">Upload</span>
+                </Button>
+              </Link>
+              <Link href={`/campaigns/${campaignId}/entities/new`}>
+                <Button variant="outline" className="w-full h-auto py-3 flex flex-col items-center gap-1">
+                  <Plus className="h-5 w-5" />
+                  <span className="text-xs">Create</span>
+                </Button>
+              </Link>
+              <Link href={`/campaigns/${campaignId}/chat`}>
+                <Button variant="outline" className="w-full h-auto py-3 flex flex-col items-center gap-1">
+                  <MessageSquare className="h-5 w-5" />
+                  <span className="text-xs">Chat</span>
+                </Button>
+              </Link>
+              <Link href={`/campaigns/${campaignId}/graph`}>
+                <Button variant="outline" className="w-full h-auto py-3 flex flex-col items-center gap-1">
+                  <Network className="h-5 w-5" />
+                  <span className="text-xs">Graph</span>
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Party Panel */}
+        <PartyPanel
+          campaignId={campaignId}
+          members={partyMembers}
+          ownerId={campaign.ownerId}
+          currentUserId={currentUserId}
+          isDM={isDM}
+          onInvite={() => setInviteModalOpen(true)}
+          onRoleChange={isDM ? handleRoleChange : undefined}
+          onRemoveMember={isDM ? handleRemoveMember : undefined}
+          onLeave={!isDM ? handleLeaveCampaign : undefined}
+        />
       </div>
 
       {/* Invite Modal */}

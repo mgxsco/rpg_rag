@@ -104,9 +104,11 @@ export default function ChatPage({
 
       <div className="flex-1">
         <div className="mb-4 md:mb-6">
-          <h1 className="text-xl md:text-2xl font-bold">Oracle</h1>
+          <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2">
+            <span>🗿</span> Barão Pedregulho
+          </h1>
           <p className="text-sm md:text-base text-muted-foreground">
-            Consult the ancient wisdom trapped within the stone. Ask questions about your campaign.
+            Consulte o sábio (ranzinza) aprisionado na pedra mágica. Ele sabe de tudo... e vai reclamar muito.
           </p>
         </div>
 

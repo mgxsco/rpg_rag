@@ -66,10 +66,40 @@ const config: Config = {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        "entity-enter": {
+          from: { opacity: "0", transform: "translateY(20px) scale(0.95)" },
+          to: { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
+        "list-enter": {
+          from: { opacity: "0", transform: "translateX(-10px)" },
+          to: { opacity: "1", transform: "translateX(0)" },
+        },
+        "section-reveal": {
+          from: { opacity: "0", transform: "translateY(15px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "float": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-8px)" },
+        },
+        "sparkle": {
+          "0%, 100%": { opacity: "0.3", transform: "scale(0.8)" },
+          "50%": { opacity: "1", transform: "scale(1.2)" },
+        },
+        "glow-pulse": {
+          "0%, 100%": { opacity: "0.4" },
+          "50%": { opacity: "0.8" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "entity-enter": "entity-enter 0.4s ease-out forwards",
+        "list-enter": "list-enter 0.3s ease-out forwards",
+        "section-reveal": "section-reveal 0.5s ease-out forwards",
+        "float": "float 3s ease-in-out infinite",
+        "sparkle": "sparkle 2s ease-in-out infinite",
+        "glow-pulse": "glow-pulse 2s ease-in-out infinite",
       },
     },
   },

@@ -25,14 +25,14 @@ export function ChatMessageComponent({
           <Feather className="w-4 h-4" />
         </div>
         <div className="adventurer-content">
-          <div className="adventurer-label">Your Query</div>
+          <div className="adventurer-label">Sua Pergunta</div>
           <p>{message.content}</p>
         </div>
       </div>
     )
   }
 
-  // Oracle/Search response
+  // Baron/Search response
   return (
     <div className={`oracle-message ${isSearchResult ? 'search-result' : ''}`}>
       <div className="oracle-message-header">
@@ -44,9 +44,9 @@ export function ChatMessageComponent({
           )}
         </div>
         <span className="oracle-label">
-          {isSearchResult ? 'From the Archives' : 'The Oracle Speaks'}
+          {isSearchResult ? 'Dos Registros' : 'O Barão Resmungando'}
         </span>
-        <div className="oracle-header-decoration">✧</div>
+        <div className="oracle-header-decoration">💢</div>
       </div>
 
       <div className="oracle-message-body">
@@ -63,7 +63,7 @@ export function ChatMessageComponent({
         <div className="oracle-sources">
           <div className="sources-header">
             <span className="sources-icon">📜</span>
-            <span>Ancient References</span>
+            <span>Fontes Consultadas</span>
           </div>
           <SourceReferences
             sources={message.sources}
@@ -74,7 +74,7 @@ export function ChatMessageComponent({
       )}
 
       <div className="oracle-message-footer">
-        <span className="oracle-seal">◆</span>
+        <span className="oracle-seal">🗿</span>
       </div>
     </div>
   )

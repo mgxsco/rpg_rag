@@ -1,16 +1,17 @@
 import {
-  User,
-  MapPin,
-  Sword,
-  Scroll,
-  Users,
+  Swords,
+  Castle,
+  Gem,
+  ScrollText,
+  Flag,
   BookOpen,
   Crown,
   Layers,
-  Bug,
-  Sparkles,
-  Star,
+  Skull,
+  Wand2,
+  Sun,
   Calendar,
+  Scroll,
 } from 'lucide-react'
 
 /**
@@ -104,23 +105,23 @@ export const ENTITY_TYPE_COLORS: Record<string, {
 }
 
 /**
- * Entity type icons mapping
+ * Entity type icons mapping - Fantasy themed
  */
 export const ENTITY_TYPE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   all: Layers,
-  npc: User,
-  location: MapPin,
-  item: Sword,
-  quest: Scroll,
-  faction: Users,
-  lore: BookOpen,
-  session: BookOpen,
-  player_character: Crown,
-  freeform: BookOpen,
-  creature: Bug,
-  spell: Sparkles,
-  deity: Star,
-  event: Calendar,
+  npc: Swords,           // Combat/adventure themed
+  location: Castle,       // Medieval castle
+  item: Gem,             // Treasure/artifact
+  quest: ScrollText,     // Quest scroll
+  faction: Flag,         // Political banner
+  lore: BookOpen,        // Ancient tome
+  session: BookOpen,     // Session notes
+  player_character: Crown, // Heroic crown
+  freeform: Scroll,      // Generic scroll
+  creature: Skull,       // Monster/creature
+  spell: Wand2,          // Magic wand
+  deity: Sun,            // Divine radiance
+  event: Calendar,       // Timeline event
 }
 
 /**

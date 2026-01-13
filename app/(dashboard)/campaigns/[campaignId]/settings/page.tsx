@@ -28,7 +28,8 @@ import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
 import { useToast } from '@/components/ui/use-toast'
-import { Save, Trash2, RefreshCw, Loader2, Globe, Cog, Search, Network, AlertTriangle, MessageSquare, RotateCcw } from 'lucide-react'
+import { Save, Trash2, RefreshCw, Loader2, Globe, Cog, Search, Network, AlertTriangle, MessageSquare, RotateCcw, Download } from 'lucide-react'
+import { ExportDialog } from '@/components/campaigns/export-dialog'
 import { getCampaignSettings, DEFAULT_SETTINGS, AGGRESSIVENESS_OPTIONS, CHUNK_SIZE_OPTIONS, LINK_LABEL_OPTIONS, DEFAULT_PROMPTS } from '@/lib/campaign-settings'
 import type { CampaignSettings } from '@/lib/db/schema'
 
@@ -303,6 +304,19 @@ export default function SettingsPage() {
                     This language is used for AI entity extraction and descriptions.
                   </p>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Download className="h-5 w-5" />
+                  Data Management
+                </CardTitle>
+                <CardDescription>Export or backup your campaign data</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ExportDialog campaignId={campaignId} campaignName={name} />
               </CardContent>
             </Card>
           </TabsContent>
