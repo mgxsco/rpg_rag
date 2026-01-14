@@ -22,6 +22,7 @@ import { ReviewToolbar } from './review-toolbar'
 import { CommitPanel } from './commit-panel'
 import {
   getEntityTypeIcon,
+  getEntityTypeColor,
   getEntityTypeBadgeClasses,
   getEntityTypeLabel,
 } from '@/lib/entity-colors'
@@ -56,6 +57,16 @@ export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithRevie
   // Phase management
   const [phase, setPhase] = useState<ReviewPhase>('upload')
   const [progressSteps, setProgressSteps] = useState<string[]>([])
+  const [extractionProgress, setExtractionProgress] = useState<{
+    stage: string
+    current: number
+    total: number
+    message: string
+  } | null>(null)
+  const [discoveredEntities, setDiscoveredEntities] = useState<Array<{
+    name: string
+    type: string
+  }>>([])
 
   // File state
   const [dragActive, setDragActive] = useState(false)
@@ -134,30 +145,30 @@ export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithRevie
       )
     : existingEntities
 
-  // Handle file upload and extraction
+  // Handle file upload and extraction with streaming progress
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return
 
-    const file = files[0] // Only process first file
+    const file = files[0]
     setFileName(file.name)
     setPhase('extracting')
     setProgressSteps([])
+    setExtractionProgress(null)
+    setDiscoveredEntities([])
+
+    // Read file content for later commit
+    const buffer = await file.arrayBuffer()
+    const content = new TextDecoder().decode(buffer)
+    setFileContent(content)
 
     try {
-      setProgressSteps((prev) => [...prev, `Processing ${file.name}...`])
+      setProgressSteps((prev) => [...prev, `Uploading ${file.name}...`])
 
-      // Read file content for later commit
-      const buffer = await file.arrayBuffer()
-      const content = new TextDecoder().decode(buffer)
-      setFileContent(content)
-
-      setProgressSteps((prev) => [...prev, 'Sending to extraction API...'])
-
-      // Send to extract-only endpoint
+      // Send to streaming extract endpoint
       const formData = new FormData()
       formData.append('file', file)
 
-      const response = await fetch(`/api/campaigns/${campaignId}/documents/extract`, {
+      const response = await fetch(`/api/campaigns/${campaignId}/documents/extract-stream`, {
         method: 'POST',
         body: formData,
       })
@@ -167,34 +178,82 @@ export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithRevie
         throw new Error(data.error || 'Extraction failed')
       }
 
-      const data: ExtractPreviewResponse = await response.json()
+      // Process SSE stream
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
 
-      setProgressSteps((prev) => [
-        ...prev,
-        `Extracted ${data.extractedEntities.length} entities`,
-        `Found ${data.extractedRelationships.length} relationships`,
-      ])
-
-      if (data.existingEntityMatches.length > 0) {
-        setProgressSteps((prev) => [
-          ...prev,
-          `Detected ${data.existingEntityMatches.length} potential duplicates`,
-        ])
+      if (!reader) {
+        throw new Error('No response stream')
       }
 
-      // Store extracted data
-      setEntities(data.extractedEntities)
-      setRelationships(data.extractedRelationships)
-      setExistingMatches(data.existingEntityMatches)
+      let buffer2 = ''
 
-      setPhase('review')
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer2 += decoder.decode(value, { stream: true })
+        const lines = buffer2.split('\n')
+        buffer2 = lines.pop() || ''
+
+        let currentEvent = ''
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7)
+          } else if (line.startsWith('data: ') && currentEvent) {
+            try {
+              const data = JSON.parse(line.slice(6))
+
+              switch (currentEvent) {
+                case 'progress':
+                  setProgressSteps((prev) => [...prev, data.message])
+                  break
+
+                case 'extraction':
+                  setExtractionProgress({
+                    stage: data.stage,
+                    current: data.current,
+                    total: data.total,
+                    message: data.message,
+                  })
+                  break
+
+                case 'entity':
+                  setDiscoveredEntities((prev) => [
+                    ...prev,
+                    { name: data.name, type: data.type },
+                  ])
+                  break
+
+                case 'error':
+                  throw new Error(data.message)
+
+                case 'complete':
+                  const result = data as ExtractPreviewResponse
+                  setEntities(result.extractedEntities)
+                  setRelationships(result.extractedRelationships)
+                  setExistingMatches(result.existingEntityMatches)
+                  setProgressSteps((prev) => [
+                    ...prev,
+                    `Extraction complete: ${result.extractedEntities.length} entities`,
+                  ])
+                  setPhase('review')
+                  break
+              }
+            } catch (e) {
+              // Skip invalid JSON
+            }
+            currentEvent = ''
+          }
+        }
+      }
     } catch (error) {
       console.error('Extraction error:', error)
       setProgressSteps((prev) => [
         ...prev,
         `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
       ])
-      // Stay in extracting phase to show error
+      setExtractionProgress(null)
     }
   }
 
@@ -435,30 +494,100 @@ export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithRevie
 
       {/* Extracting Phase */}
       {phase === 'extracting' && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              Extracting Entities
-            </CardTitle>
-            <CardDescription>
-              Analyzing {fileName} and extracting entities...
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="bg-muted/50 rounded-lg p-4 space-y-2">
-              <p className="font-medium text-sm">Processing Log:</p>
-              <div className="space-y-1 max-h-48 overflow-y-auto text-sm font-mono">
-                {progressSteps.map((step, index) => (
-                  <div key={index} className="flex items-center gap-2 text-muted-foreground">
-                    <span className="text-xs text-muted-foreground/50">[{index + 1}]</span>
-                    <span>{step}</span>
+        <div className="grid gap-4 lg:grid-cols-[1fr,300px]">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Extracting Entities
+              </CardTitle>
+              <CardDescription>
+                Analyzing {fileName}...
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Progress bar for chunk processing */}
+              {extractionProgress && extractionProgress.total > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{extractionProgress.message}</span>
+                    <span className="font-medium">
+                      {extractionProgress.current}/{extractionProgress.total}
+                    </span>
                   </div>
-                ))}
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary transition-all duration-300"
+                      style={{
+                        width: `${(extractionProgress.current / extractionProgress.total) * 100}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Processing log */}
+              <div className="bg-muted/50 rounded-lg p-3 space-y-1.5">
+                <p className="font-medium text-xs text-muted-foreground">Activity Log</p>
+                <div className="space-y-1 max-h-32 overflow-y-auto text-sm font-mono">
+                  {progressSteps.map((step, index) => (
+                    <div key={index} className="flex items-center gap-2 text-muted-foreground">
+                      <CheckCircle className="h-3 w-3 text-green-500 shrink-0" />
+                      <span className="text-xs">{step}</span>
+                    </div>
+                  ))}
+                  {extractionProgress && (
+                    <div className="flex items-center gap-2 text-primary">
+                      <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                      <span className="text-xs">{extractionProgress.message}</span>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+
+          {/* Live discovered entities */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Discovered Entities
+                {discoveredEntities.length > 0 && (
+                  <Badge variant="secondary" className="ml-auto">
+                    {discoveredEntities.length}
+                  </Badge>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {discoveredEntities.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Entities will appear here as they are found...
+                </p>
+              ) : (
+                <div className="space-y-1 max-h-64 overflow-y-auto">
+                  {discoveredEntities.map((entity, index) => {
+                    const Icon = getEntityTypeIcon(entity.type)
+                    const typeColors = getEntityTypeColor(entity.type)
+                    return (
+                      <div
+                        key={index}
+                        className="flex items-center gap-2 py-1 px-2 rounded bg-muted/50 animate-in fade-in slide-in-from-left-2 duration-300"
+                      >
+                        <Icon className={`h-3.5 w-3.5 shrink-0 ${typeColors.text}`} />
+                        <span className="text-sm truncate flex-1">{entity.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {getEntityTypeLabel(entity.type)}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {/* Review Phase */}
