@@ -10,7 +10,6 @@ import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
 import { MarkdownRenderer } from '@/components/editor/markdown-renderer'
 import { EntityDetailActions } from '@/components/entities/entity-detail-actions'
 import { EntityComments } from '@/components/entities/entity-comments'
-import { ClaimCharacterButton } from '@/components/entities/claim-character-button'
 import {
   Edit,
   Lock,
@@ -189,17 +188,13 @@ export default async function EntityViewPage({
                     Also known as: {entity.aliases.join(', ')}
                   </p>
                 )}
-                {entity.entityType === 'player_character' && (
-                  <div className="mt-3">
-                    <ClaimCharacterButton
-                      entityId={params.entityId}
-                      campaignId={params.campaignId}
-                      currentPlayerId={entity.playerId}
-                      currentPlayerName={entity.player?.user.name || entity.player?.user.email || null}
-                      currentUserId={session.user.id}
-                      currentUserMemberId={membership?.id || null}
-                      isDM={isDM}
-                    />
+                {entity.entityType === 'player_character' && entity.player && (
+                  <div className="flex items-center gap-2 mt-2 text-sm">
+                    <User className="h-4 w-4 text-primary" />
+                    <span className="text-muted-foreground">Played by:</span>
+                    <span className="font-medium">
+                      {entity.player.user.name || entity.player.user.email}
+                    </span>
                   </div>
                 )}
               </div>
