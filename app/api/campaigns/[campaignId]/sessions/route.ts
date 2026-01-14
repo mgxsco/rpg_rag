@@ -1,9 +1,10 @@
-import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { NextRequest, NextResponse } from 'next/server'
 import { db, entities } from '@/lib/db'
-import { eq, and, desc, asc } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import { syncEntityEmbeddings } from '@/lib/ai/entity-embeddings'
-import { checkCampaignAccess, isAccessError } from '@/lib/api/access'
+import { withCampaignAuth, withDMAuth } from '@/lib/api/auth'
+
+type Params = { campaignId: string }
 
 /**
  * Get all sessions for a campaign
@@ -15,21 +16,7 @@ import { checkCampaignAccess, isAccessError } from '@/lib/api/access'
  *   - limit: Max results (default 100, max 500)
  *   - offset: Skip N results for pagination
  */
-export async function GET(
-  request: Request,
-  { params }: { params: { campaignId: string } }
-) {
-  const session = await getSession()
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const access = await checkCampaignAccess(params.campaignId, session.user.id)
-  if (isAccessError(access)) {
-    return NextResponse.json({ error: access.error }, { status: access.status })
-  }
-
+export const GET = withCampaignAuth<Params>(async (request, { access, campaignId }) => {
   const { searchParams } = new URL(request.url)
   const status = searchParams.get('status')
   const sort = searchParams.get('sort') || 'number'
@@ -40,7 +27,7 @@ export async function GET(
   // Get all sessions (entities with type = 'session')
   let allSessions = await db.query.entities.findMany({
     where: and(
-      eq(entities.campaignId, params.campaignId),
+      eq(entities.campaignId, campaignId),
       eq(entities.entityType, 'session')
     ),
   })
@@ -88,32 +75,13 @@ export async function GET(
       hasMore: offset + limit < totalCount,
     },
   })
-}
+})
 
 /**
  * Create a new session
  * POST /api/campaigns/{campaignId}/sessions
  */
-export async function POST(
-  request: Request,
-  { params }: { params: { campaignId: string } }
-) {
-  const session = await getSession()
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const access = await checkCampaignAccess(params.campaignId, session.user.id)
-  if (isAccessError(access)) {
-    return NextResponse.json({ error: access.error }, { status: access.status })
-  }
-
-  // Only DM can create sessions
-  if (!access.isDM) {
-    return NextResponse.json({ error: 'Only DM can create sessions' }, { status: 403 })
-  }
-
+export const POST = withDMAuth<Params>(async (request, { campaignId }) => {
   const body = await request.json()
   const {
     name,
@@ -138,7 +106,7 @@ export async function POST(
   // Check for duplicate
   const existing = await db.query.entities.findFirst({
     where: and(
-      eq(entities.campaignId, params.campaignId),
+      eq(entities.campaignId, campaignId),
       eq(entities.canonicalName, canonicalName)
     ),
   })
@@ -154,7 +122,7 @@ export async function POST(
   const [newSession] = await db
     .insert(entities)
     .values({
-      campaignId: params.campaignId,
+      campaignId,
       name,
       canonicalName,
       entityType: 'session',
@@ -171,7 +139,7 @@ export async function POST(
   try {
     await syncEntityEmbeddings(
       newSession.id,
-      params.campaignId,
+      campaignId,
       newSession.name,
       newSession.content || ''
     )
@@ -180,4 +148,4 @@ export async function POST(
   }
 
   return NextResponse.json(newSession, { status: 201 })
-}
+})

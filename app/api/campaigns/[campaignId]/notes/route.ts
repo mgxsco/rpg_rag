@@ -1,11 +1,12 @@
-import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { NextRequest, NextResponse } from 'next/server'
 import { db, notes } from '@/lib/db'
 import { eq, and, desc } from 'drizzle-orm'
 import { titleToSlug } from '@/lib/wikilinks/parser'
 import { syncNoteLinks } from '@/lib/wikilinks/sync'
 import { syncNoteEmbeddings } from '@/lib/ai/embeddings'
-import { checkCampaignAccess, isAccessError } from '@/lib/api/access'
+import { withCampaignAuth } from '@/lib/api/auth'
+
+type Params = { campaignId: string }
 
 /**
  * List notes for a campaign
@@ -15,33 +16,17 @@ import { checkCampaignAccess, isAccessError } from '@/lib/api/access'
  *   - limit: Max results (default 100, max 500)
  *   - offset: Skip N results for pagination
  */
-export async function GET(
-  request: Request,
-  { params }: { params: { campaignId: string } }
-) {
-  const session = await getSession()
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const access = await checkCampaignAccess(params.campaignId, session.user.id)
-  if (isAccessError(access)) {
-    return NextResponse.json({ error: access.error }, { status: access.status })
-  }
-
+export const GET = withCampaignAuth<Params>(async (request, { access, campaignId }) => {
   const { searchParams } = new URL(request.url)
   const type = searchParams.get('type')
   const limit = Math.min(parseInt(searchParams.get('limit') || '100'), 500)
   const offset = parseInt(searchParams.get('offset') || '0')
 
-  let query = db
+  const allNotes = await db
     .select()
     .from(notes)
-    .where(eq(notes.campaignId, params.campaignId))
+    .where(eq(notes.campaignId, campaignId))
     .orderBy(desc(notes.updatedAt))
-
-  const allNotes = await query
 
   // Filter DM-only notes for non-DMs
   const filteredNotes = access.isDM
@@ -67,23 +52,13 @@ export async function GET(
       hasMore: offset + limit < totalCount,
     },
   })
-}
+})
 
-export async function POST(
-  request: Request,
-  { params }: { params: { campaignId: string } }
-) {
-  const session = await getSession()
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const access = await checkCampaignAccess(params.campaignId, session.user.id)
-  if (isAccessError(access)) {
-    return NextResponse.json({ error: access.error }, { status: access.status })
-  }
-
+/**
+ * Create a new note
+ * POST /api/campaigns/{campaignId}/notes
+ */
+export const POST = withCampaignAuth<Params>(async (request, { user, campaignId }) => {
   const body = await request.json()
   const { title, content, noteType, tags, isDmOnly } = body
 
@@ -96,7 +71,7 @@ export async function POST(
   // Check for duplicate slug
   const existing = await db.query.notes.findFirst({
     where: and(
-      eq(notes.campaignId, params.campaignId),
+      eq(notes.campaignId, campaignId),
       eq(notes.slug, slug)
     ),
   })
@@ -111,8 +86,8 @@ export async function POST(
   const [note] = await db
     .insert(notes)
     .values({
-      campaignId: params.campaignId,
-      authorId: session.user.id,
+      campaignId,
+      authorId: user.id,
       title,
       slug,
       content: content || '',
@@ -124,11 +99,11 @@ export async function POST(
 
   // Sync wikilinks and embeddings
   try {
-    await syncNoteLinks(note.id, params.campaignId, note.content || '')
-    await syncNoteEmbeddings(note.id, params.campaignId, note.title, note.content || '')
+    await syncNoteLinks(note.id, campaignId, note.content || '')
+    await syncNoteEmbeddings(note.id, campaignId, note.title, note.content || '')
   } catch (error) {
     console.error('Error syncing note:', error)
   }
 
   return NextResponse.json(note)
-}
+})

@@ -1,5 +1,4 @@
-import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { NextRequest, NextResponse } from 'next/server'
 import {
   db,
   entities,
@@ -9,32 +8,20 @@ import {
 } from '@/lib/db'
 import { eq, and } from 'drizzle-orm'
 import { syncEntityEmbeddings, deleteEntityChunks } from '@/lib/ai/entity-embeddings'
-import { checkCampaignAccess, isAccessError } from '@/lib/api/access'
+import { withCampaignAuth, withDMAuth } from '@/lib/api/auth'
+
+type Params = { campaignId: string; entityId: string }
 
 /**
  * Get a single entity with all its relationships and backlinks
  * GET /api/campaigns/{campaignId}/entities/{entityId}
  */
-export async function GET(
-  request: Request,
-  { params }: { params: { campaignId: string; entityId: string } }
-) {
-  const session = await getSession()
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const access = await checkCampaignAccess(params.campaignId, session.user.id)
-  if (isAccessError(access)) {
-    return NextResponse.json({ error: access.error }, { status: access.status })
-  }
-
+export const GET = withCampaignAuth<Params>(async (request, { access, campaignId }, params) => {
   // Get the entity with player info
   const entity = await db.query.entities.findFirst({
     where: and(
       eq(entities.id, params.entityId),
-      eq(entities.campaignId, params.campaignId)
+      eq(entities.campaignId, campaignId)
     ),
     with: {
       player: {
@@ -109,7 +96,7 @@ export async function GET(
     // Get all campaign entities for content backlink search
     // Note: For large campaigns, consider using PostgreSQL full-text search
     db.query.entities.findMany({
-      where: eq(entities.campaignId, params.campaignId),
+      where: eq(entities.campaignId, campaignId),
       columns: {
         id: true,
         name: true,
@@ -159,32 +146,18 @@ export async function GET(
     })),
     isDM: access.isDM,
   })
-}
+})
 
 /**
  * Update an entity
  * PUT /api/campaigns/{campaignId}/entities/{entityId}
  */
-export async function PUT(
-  request: Request,
-  { params }: { params: { campaignId: string; entityId: string } }
-) {
-  const session = await getSession()
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const access = await checkCampaignAccess(params.campaignId, session.user.id)
-  if (isAccessError(access)) {
-    return NextResponse.json({ error: access.error }, { status: access.status })
-  }
-
+export const PUT = withCampaignAuth<Params>(async (request, { user, campaignId }, params) => {
   // Get the entity
   const entity = await db.query.entities.findFirst({
     where: and(
       eq(entities.id, params.entityId),
-      eq(entities.campaignId, params.campaignId)
+      eq(entities.campaignId, campaignId)
     ),
   })
 
@@ -200,7 +173,7 @@ export async function PUT(
     entityId: entity.id,
     name: entity.name,
     content: entity.content || '',
-    editedBy: session.user.id,
+    editedBy: user.id,
   })
 
   // Update canonical name if name changed
@@ -214,7 +187,7 @@ export async function PUT(
     // Check for duplicate
     const existing = await db.query.entities.findFirst({
       where: and(
-        eq(entities.campaignId, params.campaignId),
+        eq(entities.campaignId, campaignId),
         eq(entities.canonicalName, canonicalName)
       ),
     })
@@ -254,7 +227,7 @@ export async function PUT(
     try {
       await syncEntityEmbeddings(
         updated.id,
-        params.campaignId,
+        campaignId,
         updated.name,
         updated.content || ''
       )
@@ -264,37 +237,18 @@ export async function PUT(
   }
 
   return NextResponse.json(updated)
-}
+})
 
 /**
  * Delete an entity
  * DELETE /api/campaigns/{campaignId}/entities/{entityId}
  */
-export async function DELETE(
-  request: Request,
-  { params }: { params: { campaignId: string; entityId: string } }
-) {
-  const session = await getSession()
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const access = await checkCampaignAccess(params.campaignId, session.user.id)
-  if (isAccessError(access)) {
-    return NextResponse.json({ error: access.error }, { status: access.status })
-  }
-
-  // Only DM can delete
-  if (!access.isDM) {
-    return NextResponse.json({ error: 'Only DM can delete entities' }, { status: 403 })
-  }
-
+export const DELETE = withDMAuth<Params>(async (request, { campaignId }, params) => {
   // Get the entity
   const entity = await db.query.entities.findFirst({
     where: and(
       eq(entities.id, params.entityId),
-      eq(entities.campaignId, params.campaignId)
+      eq(entities.campaignId, campaignId)
     ),
   })
 
@@ -309,4 +263,4 @@ export async function DELETE(
   await db.delete(entities).where(eq(entities.id, params.entityId))
 
   return NextResponse.json({ success: true, deleted: entity.name })
-}
+})

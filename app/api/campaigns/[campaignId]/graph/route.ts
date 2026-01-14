@@ -1,9 +1,10 @@
-import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { NextRequest, NextResponse } from 'next/server'
 import { db, notes, noteLinks, entities, relationships } from '@/lib/db'
 import { eq } from 'drizzle-orm'
 import { GraphData } from '@/lib/types'
-import { checkCampaignAccess, isAccessError } from '@/lib/api/access'
+import { withCampaignAuth } from '@/lib/api/auth'
+
+type Params = { campaignId: string }
 
 /**
  * Get graph data for visualization
@@ -14,38 +15,24 @@ import { checkCampaignAccess, isAccessError } from '@/lib/api/access'
  *   - depth: how many hops from center (default 2)
  *   - type: filter by entity type
  */
-export async function GET(
-  request: Request,
-  { params }: { params: { campaignId: string } }
-) {
-  const session = await getSession()
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const access = await checkCampaignAccess(params.campaignId, session.user.id)
-  if (isAccessError(access)) {
-    return NextResponse.json({ error: access.error }, { status: access.status })
-  }
-
+export const GET = withCampaignAuth<Params>(async (request, { access, campaignId }) => {
   const { searchParams } = new URL(request.url)
   const source = searchParams.get('source') || 'entities'
 
   // Use new entity-based graph by default
   if (source === 'entities') {
     try {
-      return await getEntityGraph(params.campaignId, access.isDM, searchParams)
+      return await getEntityGraph(campaignId, access.isDM, searchParams)
     } catch (error) {
       console.error('[Graph] Entity graph failed, falling back to notes:', error)
       // Fall back to notes if entity tables don't exist
-      return getNotesGraph(params.campaignId, access.isDM)
+      return getNotesGraph(campaignId, access.isDM)
     }
   }
 
   // Legacy: notes-based graph
-  return getNotesGraph(params.campaignId, access.isDM)
-}
+  return getNotesGraph(campaignId, access.isDM)
+})
 
 /**
  * Get entity-based knowledge graph
