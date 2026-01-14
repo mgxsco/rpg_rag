@@ -74,12 +74,12 @@ export function CampaignSidebar({ campaignId, isDM }: CampaignSidebarProps) {
 
   return (
     <aside className="hidden md:block w-52 lg:w-56 xl:w-60 shrink-0">
-      <div className="sticky top-20 space-y-2 sm:space-y-3 p-2 sm:p-3 rounded-sm border-2 border-border bg-gradient-to-b from-card to-[hsl(35_25%_88%)] shadow-lg relative">
+      <div className="sticky top-20 space-y-2 sm:space-y-3 p-2 sm:p-3 rounded-sm border-2 border-border bg-card shadow-lg relative">
         {/* Decorative corner ornaments */}
-        <div className="absolute top-1 left-1 w-3 h-3 border-t-2 border-l-2 border-[hsl(45_80%_45%)] opacity-60" />
-        <div className="absolute top-1 right-1 w-3 h-3 border-t-2 border-r-2 border-[hsl(45_80%_45%)] opacity-60" />
-        <div className="absolute bottom-1 left-1 w-3 h-3 border-b-2 border-l-2 border-[hsl(45_80%_45%)] opacity-60" />
-        <div className="absolute bottom-1 right-1 w-3 h-3 border-b-2 border-r-2 border-[hsl(45_80%_45%)] opacity-60" />
+        <div className="absolute top-1 left-1 w-3 h-3 border-t-2 border-l-2 border-primary/40" />
+        <div className="absolute top-1 right-1 w-3 h-3 border-t-2 border-r-2 border-primary/40" />
+        <div className="absolute bottom-1 left-1 w-3 h-3 border-b-2 border-l-2 border-primary/40" />
+        <div className="absolute bottom-1 right-1 w-3 h-3 border-b-2 border-r-2 border-primary/40" />
 
         <Link href="/campaigns">
           <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground hover:text-primary">
@@ -88,8 +88,8 @@ export function CampaignSidebar({ campaignId, isDM }: CampaignSidebarProps) {
           </Button>
         </Link>
 
-        {/* Gold separator */}
-        <div className="h-px w-full bg-gradient-to-r from-transparent via-[hsl(45_80%_45%)] to-transparent opacity-50" />
+        {/* Separator */}
+        <div className="h-px w-full bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
 
         <nav className="space-y-0.5">
           {links.map((link) => {
@@ -103,7 +103,7 @@ export function CampaignSidebar({ campaignId, isDM }: CampaignSidebarProps) {
                   variant={isActive ? 'secondary' : 'ghost'}
                   className={cn(
                     'w-full justify-start',
-                    isActive && 'bg-gradient-to-r from-secondary to-[hsl(35_30%_82%)] border border-border shadow-sm'
+                    isActive && 'bg-secondary border border-border shadow-sm'
                   )}
                 >
                   <link.icon className="h-4 w-4 mr-2" />
