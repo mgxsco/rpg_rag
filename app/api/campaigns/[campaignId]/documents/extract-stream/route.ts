@@ -155,8 +155,8 @@ export async function POST(
           mode: extractionSettings.aggressiveness,
         })
 
-        // Run extraction pipeline with progress callback
-        const extraction = await runExtractionPipeline(
+        // Run extraction pipeline with progress callback and timeout
+        const extractionPromise = runExtractionPipeline(
           content,
           fileName,
           existingNames,
@@ -169,8 +169,19 @@ export async function POST(
               message: progress.message,
             })
           },
-          extractionSettings
+          {
+            ...extractionSettings,
+            maxChunks: 8, // Limit chunks to avoid timeout
+            parallelBatchSize: 2, // Smaller batches for stability
+          }
         )
+
+        // Timeout after 50 seconds (Vercel Pro has 60s limit)
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Extraction timed out - try a smaller file')), 50000)
+        )
+
+        const extraction = await Promise.race([extractionPromise, timeoutPromise])
 
         await sendEvent('progress', {
           stage: 'processing',
