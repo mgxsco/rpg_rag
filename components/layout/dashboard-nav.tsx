@@ -15,6 +15,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { User } from '@/lib/db/schema'
 import { BookOpen, LogOut, User as UserIcon } from 'lucide-react'
+import { ThemeSwitcher } from '@/components/theme-switcher'
 
 interface DashboardNavProps {
   user: {
@@ -46,7 +47,8 @@ export function DashboardNav({ user, profile }: DashboardNavProps) {
           <span>D&D Campaign Manager</span>
         </Link>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <ThemeSwitcher />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-10 w-10 rounded-full">
