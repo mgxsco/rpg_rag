@@ -367,85 +367,30 @@
   text-decoration-style: dashed;
 }
 
-/* Entity type badges - medieval themed */
-.note-type-session {
+/* Entity type badges - medieval themed
+   Uses CSS custom properties for consistent gradient pattern */
+[class*="note-type-"] {
   @apply border;
-  background: linear-gradient(180deg, hsl(220 50% 90%) 0%, hsl(220 40% 80%) 100%);
-  color: hsl(220 60% 30%);
-  border-color: hsl(220 40% 60%);
+  background: linear-gradient(180deg,
+    hsl(var(--badge-hue) var(--badge-sat-light) var(--badge-light-l, 89%)) 0%,
+    hsl(var(--badge-hue) var(--badge-sat-dark) var(--badge-dark-l, 79%)) 100%
+  );
+  color: hsl(var(--badge-hue) var(--badge-text-sat) var(--badge-text-l, 28%));
+  border-color: hsl(var(--badge-hue) var(--badge-sat-dark) var(--badge-border-l, 55%));
 }
-.note-type-npc {
-  @apply border;
-  background: linear-gradient(180deg, hsl(140 40% 88%) 0%, hsl(140 35% 78%) 100%);
-  color: hsl(140 45% 25%);
-  border-color: hsl(140 35% 50%);
-}
-.note-type-location {
-  @apply border;
-  background: linear-gradient(180deg, hsl(35 60% 88%) 0%, hsl(35 50% 78%) 100%);
-  color: hsl(35 70% 25%);
-  border-color: hsl(35 50% 55%);
-}
-.note-type-item {
-  @apply border;
-  background: linear-gradient(180deg, hsl(280 40% 90%) 0%, hsl(280 35% 80%) 100%);
-  color: hsl(280 50% 30%);
-  border-color: hsl(280 35% 55%);
-}
-.note-type-lore {
-  @apply border;
-  background: linear-gradient(180deg, hsl(350 50% 90%) 0%, hsl(350 45% 80%) 100%);
-  color: hsl(350 60% 30%);
-  border-color: hsl(350 45% 55%);
-}
-.note-type-quest {
-  @apply border;
-  background: linear-gradient(180deg, hsl(45 70% 88%) 0%, hsl(45 60% 75%) 100%);
-  color: hsl(45 80% 25%);
-  border-color: hsl(45 60% 50%);
-}
-.note-type-faction {
-  @apply border;
-  background: linear-gradient(180deg, hsl(25 55% 88%) 0%, hsl(25 50% 78%) 100%);
-  color: hsl(25 60% 28%);
-  border-color: hsl(25 50% 50%);
-}
-.note-type-player_character {
-  @apply border;
-  background: linear-gradient(180deg, hsl(260 45% 90%) 0%, hsl(260 40% 80%) 100%);
-  color: hsl(260 55% 30%);
-  border-color: hsl(260 40% 55%);
-}
-.note-type-creature {
-  @apply border;
-  background: linear-gradient(180deg, hsl(80 45% 88%) 0%, hsl(80 40% 78%) 100%);
-  color: hsl(80 50% 25%);
-  border-color: hsl(80 40% 50%);
-}
-.note-type-spell {
-  @apply border;
-  background: linear-gradient(180deg, hsl(270 50% 90%) 0%, hsl(270 45% 82%) 100%);
-  color: hsl(270 55% 35%);
-  border-color: hsl(270 45% 60%);
-}
-.note-type-deity {
-  @apply border;
-  background: linear-gradient(180deg, hsl(45 80% 90%) 0%, hsl(45 70% 80%) 100%);
-  color: hsl(45 90% 25%);
-  border-color: hsl(45 70% 55%);
-}
-.note-type-event {
-  @apply border;
-  background: linear-gradient(180deg, hsl(200 50% 90%) 0%, hsl(200 45% 80%) 100%);
-  color: hsl(200 55% 30%);
-  border-color: hsl(200 45% 55%);
-}
-.note-type-freeform {
-  @apply border;
-  background: linear-gradient(180deg, hsl(30 15% 90%) 0%, hsl(30 10% 80%) 100%);
-  color: hsl(30 20% 35%);
-  border-color: hsl(30 15% 60%);
-}
+.note-type-session { --badge-hue: 220; --badge-sat-light: 50%; --badge-sat-dark: 40%; --badge-text-sat: 60%; --badge-light-l: 90%; --badge-dark-l: 80%; --badge-text-l: 30%; --badge-border-l: 60%; }
+.note-type-npc { --badge-hue: 140; --badge-sat-light: 40%; --badge-sat-dark: 35%; --badge-text-sat: 45%; --badge-light-l: 88%; --badge-dark-l: 78%; --badge-text-l: 25%; --badge-border-l: 50%; }
+.note-type-location { --badge-hue: 35; --badge-sat-light: 60%; --badge-sat-dark: 50%; --badge-text-sat: 70%; --badge-light-l: 88%; --badge-dark-l: 78%; --badge-text-l: 25%; --badge-border-l: 55%; }
+.note-type-item { --badge-hue: 280; --badge-sat-light: 40%; --badge-sat-dark: 35%; --badge-text-sat: 50%; --badge-light-l: 90%; --badge-dark-l: 80%; --badge-text-l: 30%; --badge-border-l: 55%; }
+.note-type-lore { --badge-hue: 350; --badge-sat-light: 50%; --badge-sat-dark: 45%; --badge-text-sat: 60%; --badge-light-l: 90%; --badge-dark-l: 80%; --badge-text-l: 30%; --badge-border-l: 55%; }
+.note-type-quest { --badge-hue: 45; --badge-sat-light: 70%; --badge-sat-dark: 60%; --badge-text-sat: 80%; --badge-light-l: 88%; --badge-dark-l: 75%; --badge-text-l: 25%; --badge-border-l: 50%; }
+.note-type-faction { --badge-hue: 25; --badge-sat-light: 55%; --badge-sat-dark: 50%; --badge-text-sat: 60%; --badge-light-l: 88%; --badge-dark-l: 78%; --badge-text-l: 28%; --badge-border-l: 50%; }
+.note-type-player_character { --badge-hue: 260; --badge-sat-light: 45%; --badge-sat-dark: 40%; --badge-text-sat: 55%; --badge-light-l: 90%; --badge-dark-l: 80%; --badge-text-l: 30%; --badge-border-l: 55%; }
+.note-type-creature { --badge-hue: 80; --badge-sat-light: 45%; --badge-sat-dark: 40%; --badge-text-sat: 50%; --badge-light-l: 88%; --badge-dark-l: 78%; --badge-text-l: 25%; --badge-border-l: 50%; }
+.note-type-spell { --badge-hue: 270; --badge-sat-light: 50%; --badge-sat-dark: 45%; --badge-text-sat: 55%; --badge-light-l: 90%; --badge-dark-l: 82%; --badge-text-l: 35%; --badge-border-l: 60%; }
+.note-type-deity { --badge-hue: 45; --badge-sat-light: 80%; --badge-sat-dark: 70%; --badge-text-sat: 90%; --badge-light-l: 90%; --badge-dark-l: 80%; --badge-text-l: 25%; --badge-border-l: 55%; }
+.note-type-event { --badge-hue: 200; --badge-sat-light: 50%; --badge-sat-dark: 45%; --badge-text-sat: 55%; --badge-light-l: 90%; --badge-dark-l: 80%; --badge-text-l: 30%; --badge-border-l: 55%; }
+.note-type-freeform { --badge-hue: 30; --badge-sat-light: 15%; --badge-sat-dark: 10%; --badge-text-sat: 20%; --badge-light-l: 90%; --badge-dark-l: 80%; --badge-text-l: 35%; --badge-border-l: 60%; }
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
