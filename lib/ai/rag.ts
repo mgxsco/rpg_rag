@@ -26,8 +26,11 @@ export async function searchSimilarChunks(
     enableKeywordFallback = true, // Enable keyword search fallback by default
   } = options
 
+  // Sanitize query - remove null bytes and control characters
+  const sanitizedQuery = query.replace(/\x00/g, '').replace(/[\x00-\x1F\x7F]/g, ' ').trim()
+
   console.log('[RAG] Starting search for campaign:', campaignId)
-  console.log('[RAG] Query:', query)
+  console.log('[RAG] Query:', sanitizedQuery)
   console.log('[RAG] JINA_API_KEY configured:', !!process.env.JINA_API_KEY)
 
   // Check if Jina API key is configured
@@ -35,7 +38,7 @@ export async function searchSimilarChunks(
     console.log('[RAG] JINA_API_KEY not configured - using keyword search only')
 
     // Fall back to keyword-only search
-    const keywordResults = await searchByKeyword(campaignId, query, {
+    const keywordResults = await searchByKeyword(campaignId, sanitizedQuery, {
       limit,
       excludeDmOnly,
       excludeIds: [],
@@ -48,7 +51,7 @@ export async function searchSimilarChunks(
   try {
     // Generate embedding for query (use retrieval.query task for better matching)
     console.log('[RAG] Generating embedding for query...')
-    const queryEmbedding = await generateEmbedding(query, 'retrieval.query')
+    const queryEmbedding = await generateEmbedding(sanitizedQuery, 'retrieval.query')
     console.log('[RAG] Query embedding generated, dimensions:', queryEmbedding.length)
 
     const embeddingStr = `[${queryEmbedding.join(',')}]`
@@ -139,7 +142,7 @@ export async function searchSimilarChunks(
     // Always run keyword search to find exact content matches (hybrid search)
     if (enableKeywordFallback) {
       console.log('[RAG] Running keyword search for hybrid results...')
-      const keywordResults = await searchByKeyword(campaignId, query, {
+      const keywordResults = await searchByKeyword(campaignId, sanitizedQuery, {
         limit: Math.max(3, limit - topResults.length),
         excludeDmOnly,
         excludeIds: topResults.map(r => r.entity_id),
@@ -208,8 +211,11 @@ async function searchByKeyword(
   const { limit = 5, excludeDmOnly = false, excludeIds = [] } = options
 
   try {
+    // Sanitize query - remove null bytes and control characters
+    const sanitizedQuery = query.replace(/\x00/g, '').replace(/[\x00-\x1F\x7F]/g, ' ')
+
     // Create search pattern - handle multi-word by using OR for each word
-    const words = query.toLowerCase().trim().split(/\s+/).filter(w => w.length >= 2)
+    const words = sanitizedQuery.toLowerCase().trim().split(/\s+/).filter(w => w.length >= 2)
     if (words.length === 0) {
       console.log('[RAG/Keyword] No valid search words')
       return []
