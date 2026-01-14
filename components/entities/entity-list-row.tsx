@@ -44,45 +44,44 @@ export function EntityListRow({ entity, campaignId, isDM = false, index = 0 }: E
   const typeColors = getEntityTypeColor(entity.entityType)
 
   return (
-    <div className="entity-list-row group">
+    <div className="group flex items-center bg-card hover:bg-muted/50 transition-colors">
       {/* Type indicator bar */}
       <div
-        className="list-type-indicator"
+        className="w-1 self-stretch shrink-0"
         style={{ backgroundColor: typeColors.hex }}
       />
 
       {/* Clickable area for navigation */}
       <Link
         href={`/campaigns/${campaignId}/entities/${entity.id}`}
-        className="entity-list-link flex-1 min-w-0"
+        className="flex-1 min-w-0 flex items-center gap-3 px-3 py-2.5"
       >
         {/* Icon */}
-        <div className={cn("list-icon-wrapper", typeColors.bg)}>
+        <div className={cn("flex items-center justify-center w-7 h-7 rounded shrink-0", typeColors.bg)}>
           <Icon className={cn("h-4 w-4", typeColors.text)} />
         </div>
 
         {/* Name */}
-        <span className="list-entity-name truncate">
+        <span className="flex-1 min-w-0 truncate font-medium group-hover:text-primary transition-colors">
           {entity.name}
           {entity.isDmOnly && (
-            <Lock className="dm-lock-icon inline h-3.5 w-3.5 ml-1.5" />
+            <Lock className="inline h-3.5 w-3.5 ml-1.5 text-muted-foreground" />
           )}
         </span>
 
         {/* Type Badge */}
-        <Badge variant="outline" className={cn('entity-type-badge shrink-0', typeClasses)}>
+        <Badge variant="outline" className={cn('shrink-0 hidden sm:flex', typeClasses)}>
           {getEntityTypeLabel(entity.entityType)}
         </Badge>
 
-
         {/* Updated time */}
-        <span className="text-xs text-muted-foreground shrink-0 w-16 text-right">
+        <span className="text-xs text-muted-foreground shrink-0 hidden sm:block">
           {formatTimeAgo(new Date(entity.updatedAt))}
         </span>
       </Link>
 
-      {/* Actions dropdown - visible on mobile, hover on desktop */}
-      <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity px-2">
+      {/* Actions dropdown */}
+      <div className="shrink-0 px-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
         <EntityActions
           entityId={entity.id}
           entityName={entity.name}
