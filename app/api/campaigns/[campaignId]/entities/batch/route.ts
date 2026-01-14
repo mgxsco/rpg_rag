@@ -37,6 +37,7 @@ export const POST = withCampaignAuth<Params>(async (request, { user, access, cam
     const tempIdToRealId = new Map<string, string>()
     const createdEntities: { tempId: string; id: string; name: string }[] = []
     const mergedEntities: { tempId: string; id: string; name: string }[] = []
+    const embeddingPromises: Promise<{ name: string; success: boolean }>[] = []
 
     for (const approved of approvedEntities) {
       try {
@@ -106,15 +107,19 @@ export const POST = withCampaignAuth<Params>(async (request, { user, access, cam
           name: newEntity.name,
         })
 
-        // Queue embedding generation (non-blocking)
-        syncEntityEmbeddings(
+        // Queue embedding generation with tracking
+        const embeddingPromise = syncEntityEmbeddings(
           newEntity.id,
           campaignId,
           newEntity.name,
           newEntity.content || ''
-        ).catch((err) => {
-          console.error(`[Batch] Embedding error for ${newEntity.name}:`, err)
-        })
+        )
+          .then(() => ({ name: newEntity.name, success: true }))
+          .catch((err) => {
+            console.error(`[Batch] Embedding error for ${newEntity.name}:`, err)
+            return { name: newEntity.name, success: false }
+          })
+        embeddingPromises.push(embeddingPromise)
       } catch (entityError) {
         console.error(`[Batch] Failed to create entity ${approved.name}:`, entityError)
       }
@@ -151,12 +156,31 @@ export const POST = withCampaignAuth<Params>(async (request, { user, access, cam
       }
     }
 
+    // Wait for embeddings to complete (with timeout)
+    let embeddingsSucceeded = 0
+    let embeddingsFailed = 0
+    if (embeddingPromises.length > 0) {
+      const embeddingResults = await Promise.race([
+        Promise.all(embeddingPromises),
+        new Promise<{ name: string; success: boolean }[]>((resolve) =>
+          setTimeout(() => resolve([]), 30000) // 30s timeout
+        ),
+      ])
+      embeddingsSucceeded = embeddingResults.filter((r) => r.success).length
+      embeddingsFailed = embeddingResults.filter((r) => !r.success).length
+    }
+
     const response: BatchCommitResponse = {
       success: true,
       documentId: doc.id,
       createdEntities,
       mergedEntities,
       createdRelationships: createdRelationshipsCount,
+      embeddingsStatus: {
+        total: embeddingPromises.length,
+        succeeded: embeddingsSucceeded,
+        failed: embeddingsFailed,
+      },
     }
 
     return NextResponse.json(response)

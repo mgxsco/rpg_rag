@@ -48,6 +48,11 @@ interface CommitResult {
   createdCount: number
   mergedCount: number
   relationshipsCount: number
+  embeddingsStatus?: {
+    total: number
+    succeeded: number
+    failed: number
+  }
 }
 
 export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithReviewProps) {
@@ -383,6 +388,7 @@ export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithRevie
         createdCount: result.createdEntities.length,
         mergedCount: result.mergedEntities.length,
         relationshipsCount: result.createdRelationships,
+        embeddingsStatus: result.embeddingsStatus,
       })
 
       setPhase('complete')
@@ -684,6 +690,16 @@ export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithRevie
                     `, and ${commitResult.relationshipsCount} relationships`}
                   .
                 </p>
+                {commitResult.embeddingsStatus && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Search embeddings: {commitResult.embeddingsStatus.succeeded}/{commitResult.embeddingsStatus.total} generated
+                    {commitResult.embeddingsStatus.failed > 0 && (
+                      <span className="text-amber-600 ml-1">
+                        ({commitResult.embeddingsStatus.failed} failed - try reindexing in settings)
+                      </span>
+                    )}
+                  </p>
+                )}
               </div>
               <div className="flex gap-3 mt-4">
                 <Button variant="outline" onClick={handleUploadAnother}>

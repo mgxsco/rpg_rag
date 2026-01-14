@@ -142,4 +142,9 @@ export interface BatchCommitResponse {
   createdEntities: Array<{ tempId: string; id: string; name: string }>
   mergedEntities: Array<{ tempId: string; id: string; name: string }>
   createdRelationships: number
+  embeddingsStatus?: {
+    total: number
+    succeeded: number
+    failed: number
+  }
 }

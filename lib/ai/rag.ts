@@ -7,6 +7,7 @@ export interface SearchOptions {
   threshold?: number
   excludeDmOnly?: boolean
   includeNotes?: boolean // Include note embeddings in search
+  enableKeywordFallback?: boolean // Fall back to keyword search if vector search has few results
 }
 
 /**
@@ -29,9 +30,10 @@ export async function searchSimilarChunks(
 
   const {
     limit = 8,
-    threshold = 0.3, // Lowered threshold for better matching
+    threshold = 0.2, // Low threshold - rely on keyword fallback for exact matches
     excludeDmOnly = false,
     includeNotes = true, // Include notes by default
+    enableKeywordFallback = true, // Enable keyword search fallback by default
   } = options
 
   try {
@@ -121,7 +123,24 @@ export async function searchSimilarChunks(
 
     // Sort combined results by similarity and limit
     allResults.sort((a, b) => (b.similarity || 0) - (a.similarity || 0))
-    const topResults = allResults.slice(0, limit)
+    let topResults = allResults.slice(0, limit)
+
+    console.log('[RAG] Vector search results:', topResults.length)
+
+    // Keyword fallback: if vector search found few/no results, try keyword search
+    if (enableKeywordFallback && topResults.length < 3) {
+      console.log('[RAG] Running keyword fallback search...')
+      const keywordResults = await searchByKeyword(campaignId, query, {
+        limit: limit - topResults.length,
+        excludeDmOnly,
+        excludeIds: topResults.map(r => r.entity_id),
+      })
+
+      if (keywordResults.length > 0) {
+        console.log('[RAG] Keyword fallback found:', keywordResults.length, 'additional results')
+        topResults = [...topResults, ...keywordResults].slice(0, limit)
+      }
+    }
 
     console.log('[RAG] Total search results:', topResults.length)
     if (topResults.length > 0) {
@@ -161,4 +180,74 @@ export function buildContext(results: SearchResult[]): string {
 
   console.log('[RAG] Context length:', context.length, 'characters')
   return context
+}
+
+/**
+ * Keyword-based search for entities (fallback when vector search has few results)
+ * Uses PostgreSQL ILIKE for case-insensitive matching
+ */
+async function searchByKeyword(
+  campaignId: string,
+  query: string,
+  options: {
+    limit?: number
+    excludeDmOnly?: boolean
+    excludeIds?: string[]
+  } = {}
+): Promise<SearchResult[]> {
+  const { limit = 5, excludeDmOnly = false, excludeIds = [] } = options
+
+  try {
+    // Create a single search pattern from the query
+    const searchPattern = `%${query.toLowerCase().replace(/\s+/g, '%')}%`
+
+    console.log('[RAG/Keyword] Searching with pattern:', searchPattern)
+
+    // Search entity name, content, and aliases
+    const results = await sql`
+      SELECT DISTINCT
+        e.id as entity_id,
+        e.name as entity_name,
+        e.entity_type,
+        SUBSTRING(e.content, 1, 500) as chunk_text,
+        0.25 as similarity,
+        'entity' as source_type
+      FROM entities e
+      WHERE e.campaign_id = ${campaignId}
+        AND (${!excludeDmOnly} OR e.is_dm_only = false)
+        AND (
+          LOWER(e.name) LIKE ${searchPattern}
+          OR LOWER(e.content) LIKE ${searchPattern}
+          OR EXISTS (
+            SELECT 1 FROM unnest(e.aliases) alias
+            WHERE LOWER(alias) LIKE ${searchPattern}
+          )
+        )
+      ORDER BY
+        CASE WHEN LOWER(e.name) LIKE ${searchPattern} THEN 0 ELSE 1 END,
+        e.name
+      LIMIT ${limit}
+    `
+
+    console.log('[RAG/Keyword] Found:', results.length, 'results')
+
+    // Filter out excluded IDs in JS (simpler than dynamic SQL)
+    const excludeSet = new Set(excludeIds)
+    const filtered = results.filter(row => !excludeSet.has(row.entity_id))
+
+    return filtered.map(row => ({
+      entity_id: row.entity_id,
+      entity_name: row.entity_name,
+      entity_type: row.entity_type,
+      chunk_text: row.chunk_text,
+      similarity: row.similarity,
+      source_type: 'entity' as const,
+      note_id: row.entity_id,
+      note_title: row.entity_name,
+      note_type: row.entity_type,
+    }))
+  } catch (error) {
+    console.error('[RAG/Keyword] Search error:', error)
+    return []
+  }
 }
