@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -39,7 +40,7 @@ function formatTimeAgo(date: Date): string {
   }
 }
 
-export function EntityCard({ entity, campaignId, isDM = false, index = 0 }: EntityCardProps) {
+export const EntityCard = memo(function EntityCard({ entity, campaignId, isDM = false, index = 0 }: EntityCardProps) {
   const Icon = getEntityTypeIcon(entity.entityType)
   const typeClasses = getEntityTypeBadgeClasses(entity.entityType)
   const typeColors = getEntityTypeColor(entity.entityType)
@@ -120,4 +121,4 @@ export function EntityCard({ entity, campaignId, isDM = false, index = 0 }: Enti
       </div>
     </div>
   )
-}
+})

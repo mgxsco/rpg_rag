@@ -3,41 +3,13 @@ import { getSession } from '@/lib/auth'
 import {
   db,
   entities,
-  campaigns,
-  campaignMembers,
   relationships,
   entitySources,
   entityVersions,
-  chunks,
 } from '@/lib/db'
-import { eq, and, or } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import { syncEntityEmbeddings, deleteEntityChunks } from '@/lib/ai/entity-embeddings'
-
-async function checkAccess(campaignId: string, userId: string) {
-  const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, campaignId),
-  })
-
-  if (!campaign) {
-    return { error: 'Campaign not found', status: 404 }
-  }
-
-  const membership = await db.query.campaignMembers.findFirst({
-    where: and(
-      eq(campaignMembers.campaignId, campaignId),
-      eq(campaignMembers.userId, userId)
-    ),
-  })
-
-  const isOwner = campaign.ownerId === userId
-  const isDM = membership?.role === 'dm' || isOwner
-
-  if (!membership && !isOwner) {
-    return { error: 'Access denied', status: 403 }
-  }
-
-  return { campaign, isDM, membership }
-}
+import { checkCampaignAccess, isAccessError } from '@/lib/api/access'
 
 /**
  * Get a single entity with all its relationships and backlinks
@@ -53,8 +25,8 @@ export async function GET(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const access = await checkAccess(params.campaignId, session.user.id)
-  if ('error' in access) {
+  const access = await checkCampaignAccess(params.campaignId, session.user.id)
+  if (isAccessError(access)) {
     return NextResponse.json({ error: access.error }, { status: access.status })
   }
 
@@ -89,70 +61,67 @@ export async function GET(
     return NextResponse.json({ error: 'Access denied' }, { status: 403 })
   }
 
-  // Get outgoing relationships (this entity -> other)
-  const outgoingRelationships = await db.query.relationships.findMany({
-    where: eq(relationships.sourceEntityId, params.entityId),
-    with: {
-      targetEntity: {
-        columns: {
-          id: true,
-          name: true,
-          canonicalName: true,
-          entityType: true,
-        },
-      },
-    },
-  })
-
-  // Get incoming relationships (other -> this entity) - these are backlinks
-  const incomingRelationships = await db.query.relationships.findMany({
-    where: eq(relationships.targetEntityId, params.entityId),
-    with: {
-      sourceEntity: {
-        columns: {
-          id: true,
-          name: true,
-          canonicalName: true,
-          entityType: true,
-        },
-      },
-    },
-  })
-
-  // Get source documents
-  const sources = await db.query.entitySources.findMany({
-    where: eq(entitySources.entityId, params.entityId),
-    with: {
-      document: {
-        columns: {
-          id: true,
-          name: true,
-          createdAt: true,
-        },
-      },
-    },
-  })
-
-  // Find entities that mention this one in their content (additional backlinks)
-  // Look for [[EntityName]] or aliases in content
+  // Run all independent queries in parallel for better performance
   const searchTerms = [entity.name, ...(entity.aliases || [])]
-  const contentBacklinks = await db.query.entities.findMany({
-    where: and(
-      eq(entities.campaignId, params.campaignId),
-      or(
-        ...searchTerms.map((term) =>
-          // Search for wikilink references
-          eq(
-            entities.id,
-            entities.id // placeholder - we'll filter in JS
-          )
-        )
-      )
-    ),
-  })
 
-  // Filter content backlinks (entities that mention this entity)
-  const backlinkEntities = contentBacklinks.filter((e) => {
+  const [outgoingRelationships, incomingRelationships, sources, allCampaignEntities] = await Promise.all([
+    // Get outgoing relationships (this entity -> other)
+    db.query.relationships.findMany({
+      where: eq(relationships.sourceEntityId, params.entityId),
+      with: {
+        targetEntity: {
+          columns: {
+            id: true,
+            name: true,
+            canonicalName: true,
+            entityType: true,
+          },
+        },
+      },
+    }),
+    // Get incoming relationships (other -> this entity) - these are backlinks
+    db.query.relationships.findMany({
+      where: eq(relationships.targetEntityId, params.entityId),
+      with: {
+        sourceEntity: {
+          columns: {
+            id: true,
+            name: true,
+            canonicalName: true,
+            entityType: true,
+          },
+        },
+      },
+    }),
+    // Get source documents
+    db.query.entitySources.findMany({
+      where: eq(entitySources.entityId, params.entityId),
+      with: {
+        document: {
+          columns: {
+            id: true,
+            name: true,
+            createdAt: true,
+          },
+        },
+      },
+    }),
+    // Get all campaign entities for content backlink search
+    // Note: For large campaigns, consider using PostgreSQL full-text search
+    db.query.entities.findMany({
+      where: eq(entities.campaignId, params.campaignId),
+      columns: {
+        id: true,
+        name: true,
+        canonicalName: true,
+        entityType: true,
+        content: true,
+      },
+    }),
+  ])
+
+  // Filter content backlinks (entities that mention this entity in wikilinks)
+  const backlinkEntities = allCampaignEntities.filter((e) => {
     if (e.id === entity.id) return false
     const content = e.content?.toLowerCase() || ''
     return searchTerms.some(
@@ -206,8 +175,8 @@ export async function PUT(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const access = await checkAccess(params.campaignId, session.user.id)
-  if ('error' in access) {
+  const access = await checkCampaignAccess(params.campaignId, session.user.id)
+  if (isAccessError(access)) {
     return NextResponse.json({ error: access.error }, { status: access.status })
   }
 
@@ -311,8 +280,8 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const access = await checkAccess(params.campaignId, session.user.id)
-  if ('error' in access) {
+  const access = await checkCampaignAccess(params.campaignId, session.user.id)
+  if (isAccessError(access)) {
     return NextResponse.json({ error: access.error }, { status: access.status })
   }
 

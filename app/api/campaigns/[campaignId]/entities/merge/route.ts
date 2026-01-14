@@ -1,40 +1,9 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import {
-  db,
-  entities,
-  campaigns,
-  campaignMembers,
-  relationships,
-} from '@/lib/db'
+import { db, entities, relationships } from '@/lib/db'
 import { eq, and, or } from 'drizzle-orm'
 import { syncEntityEmbeddings, deleteEntityChunks } from '@/lib/ai/entity-embeddings'
-
-async function checkAccess(campaignId: string, userId: string) {
-  const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, campaignId),
-  })
-
-  if (!campaign) {
-    return { error: 'Campaign not found', status: 404 }
-  }
-
-  const membership = await db.query.campaignMembers.findFirst({
-    where: and(
-      eq(campaignMembers.campaignId, campaignId),
-      eq(campaignMembers.userId, userId)
-    ),
-  })
-
-  const isOwner = campaign.ownerId === userId
-  const isDM = membership?.role === 'dm' || isOwner
-
-  if (!membership && !isOwner) {
-    return { error: 'Access denied', status: 403 }
-  }
-
-  return { campaign, isDM, membership }
-}
+import { checkCampaignAccess, isAccessError } from '@/lib/api/access'
 
 /**
  * Merge two entities into one
@@ -57,8 +26,8 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const access = await checkAccess(params.campaignId, session.user.id)
-  if ('error' in access) {
+  const access = await checkCampaignAccess(params.campaignId, session.user.id)
+  if (isAccessError(access)) {
     return NextResponse.json({ error: access.error }, { status: access.status })
   }
 

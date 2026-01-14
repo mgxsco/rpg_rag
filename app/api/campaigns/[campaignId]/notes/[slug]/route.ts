@@ -1,36 +1,11 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { db, notes, campaigns, campaignMembers, noteVersions } from '@/lib/db'
+import { db, notes, noteVersions } from '@/lib/db'
 import { eq, and } from 'drizzle-orm'
 import { titleToSlug } from '@/lib/wikilinks/parser'
 import { syncNoteLinks } from '@/lib/wikilinks/sync'
 import { syncNoteEmbeddings } from '@/lib/ai/embeddings'
-
-async function checkAccess(campaignId: string, userId: string) {
-  const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, campaignId),
-  })
-
-  if (!campaign) {
-    return { error: 'Campaign not found', status: 404 }
-  }
-
-  const membership = await db.query.campaignMembers.findFirst({
-    where: and(
-      eq(campaignMembers.campaignId, campaignId),
-      eq(campaignMembers.userId, userId)
-    ),
-  })
-
-  const isOwner = campaign.ownerId === userId
-  const isDM = membership?.role === 'dm' || isOwner
-
-  if (!membership && !isOwner) {
-    return { error: 'Access denied', status: 403 }
-  }
-
-  return { campaign, isDM, membership }
-}
+import { checkCampaignAccess, isAccessError } from '@/lib/api/access'
 
 export async function GET(
   request: Request,
@@ -42,8 +17,8 @@ export async function GET(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const access = await checkAccess(params.campaignId, session.user.id)
-  if ('error' in access) {
+  const access = await checkCampaignAccess(params.campaignId, session.user.id)
+  if (isAccessError(access)) {
     return NextResponse.json({ error: access.error }, { status: access.status })
   }
 
@@ -79,8 +54,8 @@ export async function PUT(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const access = await checkAccess(params.campaignId, session.user.id)
-  if ('error' in access) {
+  const access = await checkCampaignAccess(params.campaignId, session.user.id)
+  if (isAccessError(access)) {
     return NextResponse.json({ error: access.error }, { status: access.status })
   }
 
@@ -160,8 +135,8 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const access = await checkAccess(params.campaignId, session.user.id)
-  if ('error' in access) {
+  const access = await checkCampaignAccess(params.campaignId, session.user.id)
+  if (isAccessError(access)) {
     return NextResponse.json({ error: access.error }, { status: access.status })
   }
 

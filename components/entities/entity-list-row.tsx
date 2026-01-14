@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { Entity } from '@/lib/db/schema'
@@ -38,7 +39,7 @@ function formatTimeAgo(date: Date): string {
   }
 }
 
-export function EntityListRow({ entity, campaignId, isDM = false, index = 0 }: EntityListRowProps) {
+export const EntityListRow = memo(function EntityListRow({ entity, campaignId, isDM = false, index = 0 }: EntityListRowProps) {
   const Icon = getEntityTypeIcon(entity.entityType)
   const typeClasses = getEntityTypeBadgeClasses(entity.entityType)
   const typeColors = getEntityTypeColor(entity.entityType)
@@ -91,4 +92,4 @@ export function EntityListRow({ entity, campaignId, isDM = false, index = 0 }: E
       </div>
     </div>
   )
-}
+})

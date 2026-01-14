@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { ChatMessage } from '@/lib/types'
 import { SourceReferences } from './source-references'
 import { ChatContent } from './chat-content'
@@ -10,7 +11,7 @@ interface ChatMessageComponentProps {
   campaignId: string
 }
 
-export function ChatMessageComponent({
+export const ChatMessageComponent = memo(function ChatMessageComponent({
   message,
   campaignId,
 }: ChatMessageComponentProps) {
@@ -78,4 +79,4 @@ export function ChatMessageComponent({
       </div>
     </div>
   )
-}
+})

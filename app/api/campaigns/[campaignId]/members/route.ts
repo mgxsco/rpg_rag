@@ -17,6 +17,14 @@ export async function GET(
   const campaign = await db.query.campaigns.findFirst({
     where: eq(campaigns.id, params.campaignId),
     with: {
+      owner: {
+        columns: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
+        },
+      },
       members: {
         with: {
           user: {
@@ -44,18 +52,7 @@ export async function GET(
     return NextResponse.json({ error: 'Access denied' }, { status: 403 })
   }
 
-  // Get owner info
-  const owner = await db.query.users.findFirst({
-    where: eq(users.id, campaign.ownerId),
-    columns: {
-      id: true,
-      name: true,
-      email: true,
-      image: true,
-    },
-  })
-
-  // Format members list
+  // Format members list (owner already loaded via eager loading)
   const members = campaign.members.map((m) => ({
     id: m.id,
     memberId: m.id, // For reference in player character linking
@@ -68,14 +65,14 @@ export async function GET(
 
   // Add owner if not in members list
   const ownerInMembers = members.find((m) => m.userId === campaign.ownerId)
-  if (!ownerInMembers && owner) {
+  if (!ownerInMembers && campaign.owner) {
     members.unshift({
       id: campaign.ownerId, // Use owner's user ID as a placeholder
       memberId: null as any, // Owner might not have a campaign_members entry
       userId: campaign.ownerId,
       role: 'dm',
       joinedAt: campaign.createdAt,
-      user: owner,
+      user: campaign.owner,
       isOwner: true,
     })
   }

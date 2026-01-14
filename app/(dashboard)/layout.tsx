@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { getSession, getCurrentUser } from '@/lib/auth'
+import { getSession } from '@/lib/auth'
 import { DashboardNav } from '@/components/layout/dashboard-nav'
 import { MobileTabBar } from '@/components/layout/mobile-tab-bar'
 
@@ -14,11 +14,9 @@ export default async function DashboardLayout({
     redirect('/login')
   }
 
-  const user = await getCurrentUser()
-
   return (
     <div className="min-h-screen bg-background">
-      <DashboardNav user={session.user} profile={user} />
+      <DashboardNav user={session.user} />
       <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-20 md:pb-6">
         {children}
       </main>

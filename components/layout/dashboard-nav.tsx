@@ -13,7 +13,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { User } from '@/lib/db/schema'
 import { BookOpen, LogOut, User as UserIcon } from 'lucide-react'
 import { ThemeSwitcher } from '@/components/theme-switcher'
 
@@ -24,10 +23,9 @@ interface DashboardNavProps {
     email?: string | null
     image?: string | null
   }
-  profile: User | null | undefined
 }
 
-export function DashboardNav({ user, profile }: DashboardNavProps) {
+export function DashboardNav({ user }: DashboardNavProps) {
   const router = useRouter()
 
   const handleSignOut = async () => {
@@ -36,7 +34,7 @@ export function DashboardNav({ user, profile }: DashboardNavProps) {
     router.refresh()
   }
 
-  const displayName = profile?.name || user.name || user.email?.split('@')[0] || 'User'
+  const displayName = user.name || user.email?.split('@')[0] || 'User'
   const initials = displayName.slice(0, 2).toUpperCase()
 
   return (

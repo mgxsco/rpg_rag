@@ -1,38 +1,19 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { db, entities, campaigns, campaignMembers } from '@/lib/db'
+import { db, entities } from '@/lib/db'
 import { eq, and, desc, asc } from 'drizzle-orm'
 import { syncEntityEmbeddings } from '@/lib/ai/entity-embeddings'
-
-async function checkAccess(campaignId: string, userId: string) {
-  const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, campaignId),
-  })
-
-  if (!campaign) {
-    return { error: 'Campaign not found', status: 404 }
-  }
-
-  const membership = await db.query.campaignMembers.findFirst({
-    where: and(
-      eq(campaignMembers.campaignId, campaignId),
-      eq(campaignMembers.userId, userId)
-    ),
-  })
-
-  const isOwner = campaign.ownerId === userId
-  const isDM = membership?.role === 'dm' || isOwner
-
-  if (!membership && !isOwner) {
-    return { error: 'Access denied', status: 403 }
-  }
-
-  return { campaign, isDM, membership }
-}
+import { checkCampaignAccess, isAccessError } from '@/lib/api/access'
 
 /**
  * Get all sessions for a campaign
  * GET /api/campaigns/{campaignId}/sessions
+ * Query params:
+ *   - status: Filter by session status
+ *   - sort: Sort by 'number' or 'date'
+ *   - order: 'asc' or 'desc'
+ *   - limit: Max results (default 100, max 500)
+ *   - offset: Skip N results for pagination
  */
 export async function GET(
   request: Request,
@@ -44,8 +25,8 @@ export async function GET(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const access = await checkAccess(params.campaignId, session.user.id)
-  if ('error' in access) {
+  const access = await checkCampaignAccess(params.campaignId, session.user.id)
+  if (isAccessError(access)) {
     return NextResponse.json({ error: access.error }, { status: access.status })
   }
 
@@ -53,6 +34,8 @@ export async function GET(
   const status = searchParams.get('status')
   const sort = searchParams.get('sort') || 'number'
   const order = searchParams.get('order') || 'desc'
+  const limit = Math.min(parseInt(searchParams.get('limit') || '100'), 500)
+  const offset = parseInt(searchParams.get('offset') || '0')
 
   // Get all sessions (entities with type = 'session')
   let allSessions = await db.query.entities.findMany({
@@ -87,14 +70,23 @@ export async function GET(
     })
   }
 
-  // Find next planned session
+  // Find next planned session (before pagination)
   const nextSession = allSessions.find((s) => s.sessionStatus === 'planned')
 
+  // Apply pagination
+  const totalCount = allSessions.length
+  const paginatedSessions = allSessions.slice(offset, offset + limit)
+
   return NextResponse.json({
-    sessions: allSessions,
+    sessions: paginatedSessions,
     nextSession: nextSession || null,
-    totalCount: allSessions.length,
     isDM: access.isDM,
+    pagination: {
+      total: totalCount,
+      limit,
+      offset,
+      hasMore: offset + limit < totalCount,
+    },
   })
 }
 
@@ -112,8 +104,8 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const access = await checkAccess(params.campaignId, session.user.id)
-  if ('error' in access) {
+  const access = await checkCampaignAccess(params.campaignId, session.user.id)
+  if (isAccessError(access)) {
     return NextResponse.json({ error: access.error }, { status: access.status })
   }
 

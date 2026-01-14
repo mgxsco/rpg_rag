@@ -1,37 +1,20 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { db, notes, campaigns, campaignMembers } from '@/lib/db'
+import { db, notes } from '@/lib/db'
 import { eq, and, desc } from 'drizzle-orm'
 import { titleToSlug } from '@/lib/wikilinks/parser'
 import { syncNoteLinks } from '@/lib/wikilinks/sync'
 import { syncNoteEmbeddings } from '@/lib/ai/embeddings'
+import { checkCampaignAccess, isAccessError } from '@/lib/api/access'
 
-async function checkAccess(campaignId: string, userId: string) {
-  const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, campaignId),
-  })
-
-  if (!campaign) {
-    return { error: 'Campaign not found', status: 404 }
-  }
-
-  const membership = await db.query.campaignMembers.findFirst({
-    where: and(
-      eq(campaignMembers.campaignId, campaignId),
-      eq(campaignMembers.userId, userId)
-    ),
-  })
-
-  const isOwner = campaign.ownerId === userId
-  const isDM = membership?.role === 'dm' || isOwner
-
-  if (!membership && !isOwner) {
-    return { error: 'Access denied', status: 403 }
-  }
-
-  return { campaign, isDM, membership }
-}
-
+/**
+ * List notes for a campaign
+ * GET /api/campaigns/{campaignId}/notes
+ * Query params:
+ *   - type: Filter by note type
+ *   - limit: Max results (default 100, max 500)
+ *   - offset: Skip N results for pagination
+ */
 export async function GET(
   request: Request,
   { params }: { params: { campaignId: string } }
@@ -42,13 +25,15 @@ export async function GET(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const access = await checkAccess(params.campaignId, session.user.id)
-  if ('error' in access) {
+  const access = await checkCampaignAccess(params.campaignId, session.user.id)
+  if (isAccessError(access)) {
     return NextResponse.json({ error: access.error }, { status: access.status })
   }
 
   const { searchParams } = new URL(request.url)
   const type = searchParams.get('type')
+  const limit = Math.min(parseInt(searchParams.get('limit') || '100'), 500)
+  const offset = parseInt(searchParams.get('offset') || '0')
 
   let query = db
     .select()
@@ -68,7 +53,20 @@ export async function GET(
     ? filteredNotes.filter((n) => n.noteType === type)
     : filteredNotes
 
-  return NextResponse.json({ notes: result, isDM: access.isDM })
+  // Apply pagination
+  const totalCount = result.length
+  const paginatedResult = result.slice(offset, offset + limit)
+
+  return NextResponse.json({
+    notes: paginatedResult,
+    isDM: access.isDM,
+    pagination: {
+      total: totalCount,
+      limit,
+      offset,
+      hasMore: offset + limit < totalCount,
+    },
+  })
 }
 
 export async function POST(
@@ -81,8 +79,8 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const access = await checkAccess(params.campaignId, session.user.id)
-  if ('error' in access) {
+  const access = await checkCampaignAccess(params.campaignId, session.user.id)
+  if (isAccessError(access)) {
     return NextResponse.json({ error: access.error }, { status: access.status })
   }
 

@@ -208,6 +208,8 @@ export const notes = pgTable(
   (table) => ({
     uniqueSlug: unique().on(table.campaignId, table.slug),
     campaignIdx: index('notes_campaign_idx').on(table.campaignId),
+    campaignDmUpdatedIdx: index('notes_campaign_dm_updated_idx').on(table.campaignId, table.isDmOnly, table.updatedAt),
+    campaignTypeIdx: index('notes_campaign_type_idx').on(table.campaignId, table.noteType),
   })
 )
 
@@ -259,6 +261,7 @@ export const noteEmbeddings = pgTable(
   },
   (table) => ({
     campaignIdx: index('embeddings_campaign_idx').on(table.campaignId),
+    noteIdx: index('embeddings_note_idx').on(table.noteId),
   })
 )
 
@@ -485,6 +488,8 @@ export const entities = pgTable(
     uniqueCanonical: unique().on(table.campaignId, table.canonicalName),
     campaignIdx: index('entities_campaign_idx').on(table.campaignId),
     typeIdx: index('entities_type_idx').on(table.campaignId, table.entityType),
+    campaignDmIdx: index('entities_campaign_dm_idx').on(table.campaignId, table.isDmOnly),
+    campaignUpdatedIdx: index('entities_campaign_updated_idx').on(table.campaignId, table.updatedAt),
   })
 )
 
@@ -552,6 +557,8 @@ export const relationships = pgTable(
     sourceIdx: index('relationships_source_idx').on(table.sourceEntityId),
     targetIdx: index('relationships_target_idx').on(table.targetEntityId),
     campaignIdx: index('relationships_campaign_idx').on(table.campaignId),
+    campaignSourceIdx: index('relationships_campaign_source_idx').on(table.campaignId, table.sourceEntityId),
+    campaignTargetIdx: index('relationships_campaign_target_idx').on(table.campaignId, table.targetEntityId),
   })
 )
 

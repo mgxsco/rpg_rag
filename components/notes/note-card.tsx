@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -13,7 +14,7 @@ interface NoteCardProps {
   campaignId: string
 }
 
-export function NoteCard({ note, campaignId }: NoteCardProps) {
+export const NoteCard = memo(function NoteCard({ note, campaignId }: NoteCardProps) {
   // Get first 150 chars of content for preview
   const preview = (note.content || '')
     .replace(/[#*_\[\]]/g, '')
@@ -59,4 +60,4 @@ export function NoteCard({ note, campaignId }: NoteCardProps) {
       </Card>
     </Link>
   )
-}
+})

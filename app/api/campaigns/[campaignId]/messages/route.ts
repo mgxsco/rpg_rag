@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { db, campaigns, campaignMembers, messages, users } from '@/lib/db'
+import { db, campaigns, campaignMembers, messages } from '@/lib/db'
 import { eq, and, desc } from 'drizzle-orm'
 
 // GET message history for a campaign
@@ -142,16 +142,7 @@ export async function POST(
       characterName: messageType === 'ic' ? characterName || null : null,
     }).returning()
 
-    // Fetch user info for the response
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, session.user.id),
-      columns: {
-        id: true,
-        name: true,
-        image: true,
-      },
-    })
-
+    // Use session.user directly (already has id, name, image from JWT)
     const messagePayload = {
       id: newMessage.id,
       content: newMessage.content,
@@ -159,9 +150,9 @@ export async function POST(
       characterName: newMessage.characterName,
       createdAt: newMessage.createdAt.toISOString(),
       user: {
-        id: user?.id || session.user.id,
-        name: user?.name || 'Unknown',
-        image: user?.image || null,
+        id: session.user.id,
+        name: session.user.name || 'Unknown',
+        image: session.user.image || null,
       },
     }
 
