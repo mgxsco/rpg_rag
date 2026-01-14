@@ -203,6 +203,8 @@ export default async function EntityViewPage({
                   entityId={params.entityId}
                   entityName={entity.name}
                   campaignId={params.campaignId}
+                  entityType={entity.entityType}
+                  hasContent={!!entity.content && entity.content.length > 100}
                 />
               )}
             </div>
