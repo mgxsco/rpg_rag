@@ -18,16 +18,6 @@ export async function searchSimilarChunks(
   query: string,
   options: SearchOptions = {}
 ): Promise<SearchResult[]> {
-  console.log('[RAG] Starting search for campaign:', campaignId)
-  console.log('[RAG] Query:', query)
-  console.log('[RAG] JINA_API_KEY configured:', !!process.env.JINA_API_KEY)
-
-  // Check if Jina API key is configured
-  if (!process.env.JINA_API_KEY) {
-    console.log('[RAG] Skipping vector search: JINA_API_KEY not configured')
-    return []
-  }
-
   const {
     limit = 8,
     threshold = 0.2, // Low threshold - rely on keyword fallback for exact matches
@@ -35,6 +25,25 @@ export async function searchSimilarChunks(
     includeNotes = true, // Include notes by default
     enableKeywordFallback = true, // Enable keyword search fallback by default
   } = options
+
+  console.log('[RAG] Starting search for campaign:', campaignId)
+  console.log('[RAG] Query:', query)
+  console.log('[RAG] JINA_API_KEY configured:', !!process.env.JINA_API_KEY)
+
+  // Check if Jina API key is configured
+  if (!process.env.JINA_API_KEY) {
+    console.log('[RAG] JINA_API_KEY not configured - using keyword search only')
+
+    // Fall back to keyword-only search
+    const keywordResults = await searchByKeyword(campaignId, query, {
+      limit,
+      excludeDmOnly,
+      excludeIds: [],
+    })
+
+    console.log('[RAG] Keyword-only search results:', keywordResults.length)
+    return keywordResults
+  }
 
   try {
     // Generate embedding for query (use retrieval.query task for better matching)
@@ -127,17 +136,18 @@ export async function searchSimilarChunks(
 
     console.log('[RAG] Vector search results:', topResults.length)
 
-    // Keyword fallback: if vector search found few/no results, try keyword search
-    if (enableKeywordFallback && topResults.length < 3) {
-      console.log('[RAG] Running keyword fallback search...')
+    // Always run keyword search to find exact content matches (hybrid search)
+    if (enableKeywordFallback) {
+      console.log('[RAG] Running keyword search for hybrid results...')
       const keywordResults = await searchByKeyword(campaignId, query, {
-        limit: limit - topResults.length,
+        limit: Math.max(3, limit - topResults.length),
         excludeDmOnly,
         excludeIds: topResults.map(r => r.entity_id),
       })
 
       if (keywordResults.length > 0) {
-        console.log('[RAG] Keyword fallback found:', keywordResults.length, 'additional results')
+        console.log('[RAG] Keyword search found:', keywordResults.length, 'additional results')
+        // Add keyword results, they might be more relevant for exact matches
         topResults = [...topResults, ...keywordResults].slice(0, limit)
       }
     }
@@ -198,48 +208,52 @@ async function searchByKeyword(
   const { limit = 5, excludeDmOnly = false, excludeIds = [] } = options
 
   try {
-    // Create a single search pattern from the query
-    const searchPattern = `%${query.toLowerCase().replace(/\s+/g, '%')}%`
+    // Create search pattern - handle multi-word by using OR for each word
+    const words = query.toLowerCase().trim().split(/\s+/).filter(w => w.length >= 2)
+    if (words.length === 0) {
+      console.log('[RAG/Keyword] No valid search words')
+      return []
+    }
 
-    console.log('[RAG/Keyword] Searching with pattern:', searchPattern)
+    // Use the first word for primary search (most specific)
+    const searchPattern = `%${words[0]}%`
+    console.log('[RAG/Keyword] Searching with pattern:', searchPattern, 'from query:', query)
 
-    // Search entity name, content, and aliases
+    // Simple text search on entity content
     const results = await sql`
       SELECT DISTINCT
         e.id as entity_id,
         e.name as entity_name,
         e.entity_type,
-        SUBSTRING(e.content, 1, 500) as chunk_text,
+        COALESCE(SUBSTRING(e.content, 1, 500), '') as chunk_text,
         0.25 as similarity,
         'entity' as source_type
       FROM entities e
       WHERE e.campaign_id = ${campaignId}
-        AND (${!excludeDmOnly} OR e.is_dm_only = false)
+        AND (e.is_dm_only = false OR ${!excludeDmOnly})
         AND (
-          LOWER(e.name) LIKE ${searchPattern}
-          OR LOWER(e.content) LIKE ${searchPattern}
-          OR EXISTS (
-            SELECT 1 FROM unnest(e.aliases) alias
-            WHERE LOWER(alias) LIKE ${searchPattern}
-          )
+          e.name ILIKE ${searchPattern}
+          OR e.content ILIKE ${searchPattern}
         )
       ORDER BY
-        CASE WHEN LOWER(e.name) LIKE ${searchPattern} THEN 0 ELSE 1 END,
+        CASE WHEN e.name ILIKE ${searchPattern} THEN 0 ELSE 1 END,
         e.name
       LIMIT ${limit}
     `
 
-    console.log('[RAG/Keyword] Found:', results.length, 'results')
+    console.log('[RAG/Keyword] Query returned:', results.length, 'rows')
 
     // Filter out excluded IDs in JS (simpler than dynamic SQL)
     const excludeSet = new Set(excludeIds)
     const filtered = results.filter(row => !excludeSet.has(row.entity_id))
 
+    console.log('[RAG/Keyword] After excluding:', filtered.length, 'results')
+
     return filtered.map(row => ({
       entity_id: row.entity_id,
       entity_name: row.entity_name,
       entity_type: row.entity_type,
-      chunk_text: row.chunk_text,
+      chunk_text: row.chunk_text || 'No content',
       similarity: row.similarity,
       source_type: 'entity' as const,
       note_id: row.entity_id,

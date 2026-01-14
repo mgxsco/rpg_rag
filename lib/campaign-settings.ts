@@ -146,7 +146,7 @@ export const DEFAULT_SETTINGS: Required<{
     dmOnlyEntityTypes: [],
   },
   search: {
-    similarityThreshold: 0.3,
+    similarityThreshold: 0.15, // Low threshold - keyword fallback handles exact matches
     resultLimit: 8,
     enablePlayerChat: false,
   },
