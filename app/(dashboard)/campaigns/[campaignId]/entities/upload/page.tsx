@@ -31,7 +31,7 @@ export default async function UploadPage({
   return (
     <div className="flex gap-6">
       <CampaignSidebar campaignId={params.campaignId} isDM={isDM} />
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         <DocumentUpload campaignId={params.campaignId} />
       </div>
     </div>

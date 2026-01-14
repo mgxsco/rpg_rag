@@ -77,7 +77,7 @@ export default async function SessionsPage({
     <div className="flex flex-col md:flex-row gap-6">
       <CampaignSidebar campaignId={campaignId} isDM={isDM} />
 
-      <div className="flex-1 pb-20 md:pb-0">
+      <div className="flex-1 min-w-0 pb-20 md:pb-0">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>

@@ -63,7 +63,7 @@ export default async function NoteViewPage({
     <div className="flex gap-6">
       <CampaignSidebar campaignId={params.campaignId} isDM={isDM} />
 
-      <div className="flex-1 max-w-4xl">
+      <div className="flex-1 min-w-0 max-w-4xl">
         <Link
           href={`/campaigns/${params.campaignId}/notes`}
           className="inline-flex items-center text-muted-foreground hover:text-foreground mb-6"

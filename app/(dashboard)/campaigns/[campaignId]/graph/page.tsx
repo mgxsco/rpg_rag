@@ -116,12 +116,27 @@ export default function GraphPage() {
       if (filterType) url += `&type=${filterType}`
 
       const response = await fetch(url)
+      if (!response.ok) {
+        console.error('Graph API error:', response.status)
+        setGraphData(null)
+        setStats(null)
+        return
+      }
       const data = await response.json()
-      setGraphData(data.graphData)
-      setStats(data.stats)
-      setIsDM(data.isDM)
+      // Ensure graphData has required structure
+      if (data.graphData && Array.isArray(data.graphData.nodes) && Array.isArray(data.graphData.links)) {
+        setGraphData(data.graphData)
+        setStats(data.stats)
+        setIsDM(data.isDM)
+      } else {
+        console.error('Invalid graph data structure:', data)
+        setGraphData(null)
+        setStats(null)
+      }
     } catch (error) {
       console.error('Failed to load graph data:', error)
+      setGraphData(null)
+      setStats(null)
     } finally {
       setLoading(false)
     }
@@ -153,7 +168,7 @@ export default function GraphPage() {
   }
 
   // Filter graph data based on selected types
-  const filteredData = graphData ? {
+  const filteredData = graphData && graphData.nodes && graphData.links ? {
     nodes: selectedTypes.size > 0
       ? graphData.nodes.filter(n => selectedTypes.has(n.type))
       : graphData.nodes,
@@ -170,7 +185,7 @@ export default function GraphPage() {
     <div className="flex flex-col md:flex-row gap-6">
       <CampaignSidebar campaignId={campaignId} isDM={isDM} />
 
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-bold">Knowledge Graph</h1>

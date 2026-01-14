@@ -91,7 +91,7 @@ export default function ChatPage({
     return (
       <div className="flex flex-col md:flex-row gap-6">
         <CampaignSidebar campaignId={params.campaignId} isDM={false} />
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex-1 min-w-0 flex items-center justify-center">
           <p className="text-muted-foreground">Loading...</p>
         </div>
       </div>
@@ -102,7 +102,7 @@ export default function ChatPage({
     <div className="flex flex-col md:flex-row gap-6">
       <CampaignSidebar campaignId={params.campaignId} isDM={isDM} />
 
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         <div className="mb-4 md:mb-6">
           <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2">
             <span>🗿</span> Barão Pedregulho

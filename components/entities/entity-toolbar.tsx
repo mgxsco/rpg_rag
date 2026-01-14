@@ -69,9 +69,9 @@ export function EntityToolbar({ campaignId, view, sort, search }: EntityToolbarP
   }
 
   return (
-    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-3 sm:mb-4">
+    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-3 sm:mb-4 overflow-hidden">
       {/* View Toggle */}
-      <div className="flex gap-1 p-1 bg-muted rounded-lg">
+      <div className="flex gap-1 p-1 bg-muted rounded-lg shrink-0">
         <Button
           variant="ghost"
           size="sm"
@@ -100,7 +100,7 @@ export function EntityToolbar({ campaignId, view, sort, search }: EntityToolbarP
 
       {/* Sort Dropdown */}
       <Select value={sort} onValueChange={handleSortChange}>
-        <SelectTrigger className="w-full sm:w-[180px] h-10">
+        <SelectTrigger className="w-full sm:w-[180px] h-10 shrink-0">
           <SelectValue placeholder="Sort by" />
         </SelectTrigger>
         <SelectContent>
@@ -113,7 +113,7 @@ export function EntityToolbar({ campaignId, view, sort, search }: EntityToolbarP
       </Select>
 
       {/* Search Input */}
-      <form onSubmit={handleSearchSubmit} className="flex-1">
+      <form onSubmit={handleSearchSubmit} className="flex-1 min-w-0">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input

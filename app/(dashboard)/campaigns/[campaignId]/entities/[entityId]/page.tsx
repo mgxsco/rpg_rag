@@ -154,7 +154,7 @@ export default async function EntityViewPage({
     <div className="flex gap-3 sm:gap-4 md:gap-5">
       <CampaignSidebar campaignId={params.campaignId} isDM={isDM} />
 
-      <div className="flex-1 max-w-5xl">
+      <div className="flex-1 min-w-0 max-w-5xl">
         <Link
           href={`/campaigns/${params.campaignId}/entities`}
           className="inline-flex items-center text-muted-foreground hover:text-foreground mb-4"

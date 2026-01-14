@@ -228,7 +228,7 @@ export default function SettingsPage() {
     return (
       <div className="flex flex-col md:flex-row gap-6">
         <CampaignSidebar campaignId={campaignId} isDM={true} />
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex-1 min-w-0 flex items-center justify-center">
           <p className="text-muted-foreground">Loading...</p>
         </div>
       </div>
@@ -239,7 +239,7 @@ export default function SettingsPage() {
     <div className="flex flex-col md:flex-row gap-6">
       <CampaignSidebar campaignId={campaignId} isDM={true} />
 
-      <div className="flex-1 max-w-3xl">
+      <div className="flex-1 min-w-0 max-w-3xl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <h1 className="text-xl sm:text-2xl font-bold">Campaign Settings</h1>
           <Button onClick={handleSave} disabled={saving} size="sm" className="sm:size-default">

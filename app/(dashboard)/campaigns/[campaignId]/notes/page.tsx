@@ -75,7 +75,7 @@ export default async function NotesPage({
     <div className="flex flex-col md:flex-row gap-6">
       <CampaignSidebar campaignId={params.campaignId} isDM={isDM} />
 
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <h1 className="text-2xl font-bold tracking-wide">Notes</h1>
           <NotesActions campaignId={params.campaignId} />

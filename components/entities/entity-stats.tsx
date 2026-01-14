@@ -22,8 +22,8 @@ export function EntityStats({ campaignId, stats, total, activeType }: EntityStat
     .sort(([, a], [, b]) => b - a)
 
   return (
-    <div className="mb-3 sm:mb-4">
-      <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-1 px-1">
+    <div className="mb-3 sm:mb-4 overflow-hidden">
+      <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-2 scrollbar-hide">
         {/* All entities card */}
         <StatCard
           campaignId={campaignId}

@@ -115,6 +115,7 @@ export function KnowledgeGraph({
   // Precompute link counts for each node
   const nodeLinkCounts = useMemo(() => {
     const counts = new Map<string, number>()
+    if (!data.links) return counts
     for (const link of data.links) {
       const sourceId = typeof link.source === 'string' ? link.source : link.source.id
       const targetId = typeof link.target === 'string' ? link.target : link.target.id
@@ -232,10 +233,10 @@ export function KnowledgeGraph({
 
   // Memoize graph data transformation to prevent unnecessary re-renders
   const graphData = useMemo(() => ({
-    nodes: data.nodes.map((node) => ({
+    nodes: (data.nodes || []).map((node) => ({
       ...node,
     })),
-    links: data.links.map((link) => ({
+    links: (data.links || []).map((link) => ({
       ...link,
       source: typeof link.source === 'string' ? link.source : link.source.id,
       target: typeof link.target === 'string' ? link.target : link.target.id,
