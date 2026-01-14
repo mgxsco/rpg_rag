@@ -61,6 +61,7 @@
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
+    "@types/uuid": "^10.0.0",
     "autoprefixer": "^10.4.16",
     "drizzle-kit": "^0.20.6",
     "eslint": "^8.55.0",

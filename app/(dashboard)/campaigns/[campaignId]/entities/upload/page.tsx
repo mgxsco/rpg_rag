@@ -3,7 +3,7 @@ import { getSession } from '@/lib/auth'
 import { db, campaigns, campaignMembers } from '@/lib/db'
 import { eq, and } from 'drizzle-orm'
 import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
-import { DocumentUpload } from '@/components/entities/document-upload'
+import { DocumentUploadWithReview } from '@/components/entities/document-upload-with-review'
 
 export default async function UploadPage({
   params,
@@ -32,7 +32,7 @@ export default async function UploadPage({
     <div className="flex gap-6">
       <CampaignSidebar campaignId={params.campaignId} isDM={isDM} />
       <div className="flex-1 min-w-0">
-        <DocumentUpload campaignId={params.campaignId} />
+        <DocumentUploadWithReview campaignId={params.campaignId} />
       </div>
     </div>
   )
