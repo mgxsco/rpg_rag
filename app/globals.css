@@ -37,26 +37,26 @@
   }
 
   .dark {
-    /* Dark Parchment Theme - like candlelit tavern */
-    --background: 25 25% 10%; /* Dark worn leather */
-    --foreground: 38 30% 85%; /* Aged paper text */
-    --card: 25 20% 14%; /* Darker leather */
-    --card-foreground: 38 30% 85%;
-    --popover: 25 20% 12%;
-    --popover-foreground: 38 30% 85%;
-    --primary: 40 65% 55%; /* Warm gold */
-    --primary-foreground: 25 25% 10%;
-    --secondary: 25 18% 20%;
-    --secondary-foreground: 38 30% 80%;
-    --muted: 25 15% 18%;
-    --muted-foreground: 35 15% 55%;
-    --accent: 40 70% 50%; /* Bright gold */
-    --accent-foreground: 25 25% 10%;
-    --destructive: 0 55% 45%;
-    --destructive-foreground: 38 30% 90%;
-    --border: 25 20% 25%;
-    --input: 25 18% 20%;
-    --ring: 40 65% 55%;
+    /* Dark Dungeon Theme - cold stone and shadows */
+    --background: 220 15% 6%; /* Deep shadow */
+    --foreground: 210 20% 92%; /* Pale moonlight text */
+    --card: 220 15% 9%; /* Dark stone */
+    --card-foreground: 210 20% 92%;
+    --popover: 220 15% 8%;
+    --popover-foreground: 210 20% 92%;
+    --primary: 45 85% 55%; /* Magical gold */
+    --primary-foreground: 220 15% 6%;
+    --secondary: 220 12% 15%;
+    --secondary-foreground: 210 15% 85%;
+    --muted: 220 10% 12%;
+    --muted-foreground: 215 15% 60%;
+    --accent: 45 90% 50%; /* Bright enchanted gold */
+    --accent-foreground: 220 15% 6%;
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 210 20% 95%;
+    --border: 220 12% 20%;
+    --input: 220 12% 14%;
+    --ring: 45 85% 55%;
   }
 }
 
