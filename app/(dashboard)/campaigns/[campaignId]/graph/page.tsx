@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
 import { KnowledgeGraph } from '@/components/graph/knowledge-graph'
+import { ErrorBoundary, GraphErrorFallback } from '@/components/ui/error-boundary'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -242,12 +243,14 @@ export default function GraphPage() {
               </div>
             ) : filteredData && filteredData.nodes.length > 0 ? (
               <div className="h-[calc(100vh-280px)] md:h-[600px]">
-                <KnowledgeGraph
-                  data={filteredData}
-                  onNodeClick={handleNodeClick}
-                  onNodeDoubleClick={handleNodeDoubleClick}
-                  centerId={centerId}
-                />
+                <ErrorBoundary fallback={<GraphErrorFallback onRetry={resetGraph} />}>
+                  <KnowledgeGraph
+                    data={filteredData}
+                    onNodeClick={handleNodeClick}
+                    onNodeDoubleClick={handleNodeDoubleClick}
+                    centerId={centerId}
+                  />
+                </ErrorBoundary>
               </div>
             ) : (
               <div className="h-[calc(100vh-280px)] md:h-[600px] flex items-center justify-center text-muted-foreground">

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
 import { CampaignChat } from '@/components/campaigns/campaign-chat'
+import { ErrorBoundary, ChatErrorFallback } from '@/components/ui/error-boundary'
 import { Loader2 } from 'lucide-react'
 
 interface CampaignData {
@@ -65,7 +66,9 @@ export default function PartyChatPage() {
       <CampaignSidebar campaignId={campaignId} isDM={campaign.isDM} />
 
       <div className="flex-1 min-w-0">
-        <CampaignChat campaignId={campaignId} currentUserId={campaign.currentUserId} />
+        <ErrorBoundary fallback={<ChatErrorFallback />}>
+          <CampaignChat campaignId={campaignId} currentUserId={campaign.currentUserId} />
+        </ErrorBoundary>
       </div>
     </div>
   )
