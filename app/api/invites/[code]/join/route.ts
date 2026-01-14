@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { db, campaignInvites, campaignMembers } from '@/lib/db'
+import { db, campaignInvites, campaignMembers, users } from '@/lib/db'
 import { eq, and, or, gt, isNull } from 'drizzle-orm'
 import { ensureCampaignInvitesTable, ensureCampaignMembersJoinedAt } from '@/lib/db/migrations'
 
@@ -13,6 +13,18 @@ export async function POST(
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Please log in to join a campaign' }, { status: 401 })
+  }
+
+  // Verify user exists in database
+  const user = await db.query.users.findFirst({
+    where: eq(users.id, session.user.id),
+  })
+
+  if (!user) {
+    return NextResponse.json(
+      { error: 'User account not found. Please log out and register again.' },
+      { status: 400 }
+    )
   }
 
   // Ensure tables exist
