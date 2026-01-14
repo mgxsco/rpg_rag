@@ -221,12 +221,12 @@ async function searchByKeyword(
 
     // Simple text search on entity content
     const results = await sql`
-      SELECT DISTINCT
+      SELECT
         e.id as entity_id,
         e.name as entity_name,
         e.entity_type,
         COALESCE(SUBSTRING(e.content, 1, 500), '') as chunk_text,
-        0.25 as similarity,
+        CASE WHEN e.name ILIKE ${searchPattern} THEN 0.35 ELSE 0.25 END as similarity,
         'entity' as source_type
       FROM entities e
       WHERE e.campaign_id = ${campaignId}
@@ -235,9 +235,7 @@ async function searchByKeyword(
           e.name ILIKE ${searchPattern}
           OR e.content ILIKE ${searchPattern}
         )
-      ORDER BY
-        CASE WHEN e.name ILIKE ${searchPattern} THEN 0 ELSE 1 END,
-        e.name
+      ORDER BY similarity DESC, e.name
       LIMIT ${limit}
     `
 
