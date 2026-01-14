@@ -1,15 +1,30 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Upload, FileText, Loader2, CheckCircle, ArrowLeft } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Upload, FileText, Loader2, CheckCircle, ArrowLeft, Search, GitMerge } from 'lucide-react'
 import { EntityReviewCard } from './entity-review-card'
 import { EntityEditModal } from './entity-edit-modal'
 import { ReviewToolbar } from './review-toolbar'
 import { CommitPanel } from './commit-panel'
+import {
+  getEntityTypeIcon,
+  getEntityTypeBadgeClasses,
+  getEntityTypeLabel,
+} from '@/lib/entity-colors'
 import type {
   StagedEntity,
   StagedRelationship,
@@ -57,8 +72,67 @@ export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithRevie
   const [editingEntity, setEditingEntity] = useState<StagedEntity | null>(null)
   const [editModalOpen, setEditModalOpen] = useState(false)
 
+  // Merge modal state
+  const [mergeModalOpen, setMergeModalOpen] = useState(false)
+  const [mergingEntityTempId, setMergingEntityTempId] = useState<string | null>(null)
+  const [existingEntities, setExistingEntities] = useState<Array<{
+    id: string
+    name: string
+    entityType: string
+    aliases: string[] | null
+  }>>([])
+  const [mergeSearch, setMergeSearch] = useState('')
+  const [selectedMergeTarget, setSelectedMergeTarget] = useState<string | null>(null)
+  const [loadingEntities, setLoadingEntities] = useState(false)
+
   // Commit result
   const [commitResult, setCommitResult] = useState<CommitResult | null>(null)
+
+  // Load existing entities when merge modal opens
+  useEffect(() => {
+    if (mergeModalOpen && existingEntities.length === 0) {
+      loadExistingEntities()
+    }
+  }, [mergeModalOpen])
+
+  const loadExistingEntities = async () => {
+    setLoadingEntities(true)
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/entities`)
+      if (res.ok) {
+        const data = await res.json()
+        setExistingEntities(data.entities || [])
+      }
+    } catch (err) {
+      console.error('Failed to load entities:', err)
+    } finally {
+      setLoadingEntities(false)
+    }
+  }
+
+  const handleOpenMergeDialog = useCallback((tempId: string) => {
+    setMergingEntityTempId(tempId)
+    setSelectedMergeTarget(null)
+    setMergeSearch('')
+    setMergeModalOpen(true)
+  }, [])
+
+  const handleConfirmMerge = useCallback(() => {
+    if (mergingEntityTempId && selectedMergeTarget) {
+      handleMerge(mergingEntityTempId, selectedMergeTarget)
+      setMergeModalOpen(false)
+      setMergingEntityTempId(null)
+      setSelectedMergeTarget(null)
+    }
+  }, [mergingEntityTempId, selectedMergeTarget])
+
+  const filteredExistingEntities = mergeSearch
+    ? existingEntities.filter(
+        (e) =>
+          e.name.toLowerCase().includes(mergeSearch.toLowerCase()) ||
+          e.aliases?.some((a) => a.toLowerCase().includes(mergeSearch.toLowerCase()))
+      )
+    : existingEntities
 
   // Handle file upload and extraction
   const handleFiles = async (files: FileList | null) => {
@@ -422,6 +496,7 @@ export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithRevie
                       onReject={handleReject}
                       onEdit={handleEdit}
                       onMerge={handleMerge}
+                      onOpenMergeDialog={handleOpenMergeDialog}
                     />
                   ))}
                 </div>
@@ -501,6 +576,85 @@ export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithRevie
         onOpenChange={setEditModalOpen}
         onSave={handleEditSave}
       />
+
+      {/* Merge Modal */}
+      <Dialog open={mergeModalOpen} onOpenChange={setMergeModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GitMerge className="h-5 w-5" />
+              Merge into Existing Entity
+            </DialogTitle>
+            <DialogDescription>
+              Select an existing entity to merge this extracted entity into.
+              The content will be added and aliases combined.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search entities..."
+                value={mergeSearch}
+                onChange={(e) => setMergeSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+
+            {/* Entity list */}
+            <div className="max-h-64 overflow-y-auto border rounded-md">
+              {loadingEntities ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : filteredExistingEntities.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  {mergeSearch ? 'No matching entities' : 'No existing entities'}
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {filteredExistingEntities.map((entity) => {
+                    const Icon = getEntityTypeIcon(entity.entityType)
+                    const typeClasses = getEntityTypeBadgeClasses(entity.entityType)
+                    const isSelected = selectedMergeTarget === entity.id
+
+                    return (
+                      <button
+                        key={entity.id}
+                        type="button"
+                        onClick={() => setSelectedMergeTarget(entity.id)}
+                        className={`w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-accent transition-colors ${
+                          isSelected ? 'bg-accent' : ''
+                        }`}
+                      >
+                        <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span className="flex-1 truncate font-medium text-sm">
+                          {entity.name}
+                        </span>
+                        <Badge variant="outline" className={`shrink-0 text-xs ${typeClasses}`}>
+                          {getEntityTypeLabel(entity.entityType)}
+                        </Badge>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMergeModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmMerge} disabled={!selectedMergeTarget}>
+              <GitMerge className="mr-2 h-4 w-4" />
+              Merge
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -28,6 +28,7 @@ interface EntityReviewCardProps {
   onReject: (tempId: string) => void
   onEdit: (tempId: string) => void
   onMerge: (tempId: string, targetId: string) => void
+  onOpenMergeDialog: (tempId: string) => void
 }
 
 const statusStripColor = {
@@ -44,6 +45,7 @@ export const EntityReviewCard = memo(function EntityReviewCard({
   onReject,
   onEdit,
   onMerge,
+  onOpenMergeDialog,
 }: EntityReviewCardProps) {
   const [expanded, setExpanded] = useState(false)
   const Icon = getEntityTypeIcon(entity.entityType)
@@ -136,6 +138,15 @@ export const EntityReviewCard = memo(function EntityReviewCard({
           <Button
             variant="ghost"
             size="icon"
+            className="h-7 w-7"
+            onClick={() => onOpenMergeDialog(entity.tempId)}
+            title="Merge into existing entity"
+          >
+            <GitMerge className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             className="h-7 w-7 text-muted-foreground hover:text-red-600"
             onClick={() => onReject(entity.tempId)}
             title="Reject"
@@ -143,19 +154,11 @@ export const EntityReviewCard = memo(function EntityReviewCard({
             <X className="h-4 w-4" />
           </Button>
 
-          {/* Inline duplicate indicator */}
+          {/* Duplicate warning indicator */}
           {existingMatch && (
-            <div className="flex items-center gap-1.5 ml-auto">
-              <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-6 text-xs"
-                onClick={() => onMerge(entity.tempId, existingMatch.existingEntity.id)}
-              >
-                <GitMerge className="h-3 w-3 mr-1" />
-                Merge
-              </Button>
+            <div className="flex items-center gap-1.5 ml-auto text-xs text-amber-600">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Duplicate?</span>
             </div>
           )}
         </div>
