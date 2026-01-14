@@ -6,6 +6,12 @@ import { mergeAliases } from '@/lib/ai/extraction/dedup'
 import { withCampaignAuth } from '@/lib/api/auth'
 import type { BatchCommitRequest, BatchCommitResponse } from '@/lib/types'
 
+// Sanitize text to remove null bytes and problematic characters for PostgreSQL
+function sanitizeText(text: string | null | undefined): string {
+  if (!text) return ''
+  return text.replace(/\x00/g, '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
+}
+
 type Params = { campaignId: string }
 
 /**
@@ -21,13 +27,13 @@ export const POST = withCampaignAuth<Params>(async (request, { user, access, cam
   }
 
   try {
-    // 1. Create the document record
+    // 1. Create the document record (sanitize content)
     const [doc] = await db
       .insert(documents)
       .values({
         campaignId,
-        name: documentName,
-        content: documentContent,
+        name: sanitizeText(documentName),
+        content: sanitizeText(documentContent),
         fileType: 'text/plain',
         uploadedBy: user.id,
       })
@@ -76,17 +82,23 @@ export const POST = withCampaignAuth<Params>(async (request, { user, access, cam
           }
         }
 
+        // Sanitize all text fields
+        const sanitizedName = sanitizeText(approved.name)
+        const sanitizedContent = sanitizeText(approved.content)
+        const sanitizedAliases = approved.aliases.map(a => sanitizeText(a)).filter(Boolean)
+        const sanitizedTags = approved.tags.map(t => sanitizeText(t)).filter(Boolean)
+
         // Create new entity
         const [newEntity] = await db
           .insert(entities)
           .values({
             campaignId,
-            name: approved.name,
+            name: sanitizedName,
             canonicalName: approved.canonicalName,
             entityType: approved.entityType,
-            content: approved.content,
-            aliases: approved.aliases,
-            tags: approved.tags,
+            content: sanitizedContent,
+            aliases: sanitizedAliases,
+            tags: sanitizedTags,
             isDmOnly: approved.isDmOnly,
           })
           .returning()
@@ -97,7 +109,7 @@ export const POST = withCampaignAuth<Params>(async (request, { user, access, cam
         await db.insert(entitySources).values({
           entityId: newEntity.id,
           documentId: doc.id,
-          excerpt: approved.content.slice(0, 500),
+          excerpt: sanitizedContent.slice(0, 500),
           confidence: '1.0',
         })
 
