@@ -237,25 +237,31 @@ export async function POST(
           relationshipCount: stagedRelationships.length,
         })
 
-        // Find existing entity matches for duplicates
+        // Find existing entity matches for duplicates - batch query for efficiency
         await sendEvent('progress', { stage: 'duplicates', message: 'Checking for duplicates...' })
         const existingEntityMatches: EntityMatch[] = []
 
-        for (const staged of stagedEntities) {
-          const exactMatch = await db.query.entities.findFirst({
-            where: and(
-              eq(entities.campaignId, params.campaignId),
-              ilike(entities.canonicalName, staged.canonicalName)
-            ),
-            columns: {
-              id: true,
-              name: true,
-              entityType: true,
-              aliases: true,
-              canonicalName: true,
-            },
-          })
+        // Get all existing entities in one query
+        const existingEntities = await db.query.entities.findMany({
+          where: eq(entities.campaignId, params.campaignId),
+          columns: {
+            id: true,
+            name: true,
+            entityType: true,
+            aliases: true,
+            canonicalName: true,
+          },
+        })
 
+        // Build lookup map for fast matching
+        const canonicalMap = new Map<string, typeof existingEntities[0]>()
+        for (const entity of existingEntities) {
+          canonicalMap.set(entity.canonicalName.toLowerCase(), entity)
+        }
+
+        // Check each staged entity against the map
+        for (const staged of stagedEntities) {
+          const exactMatch = canonicalMap.get(staged.canonicalName.toLowerCase())
           if (exactMatch) {
             existingEntityMatches.push({
               stagedTempId: staged.tempId,
@@ -272,26 +278,14 @@ export async function POST(
             continue
           }
 
+          // Check aliases
           for (const alias of staged.aliases) {
             const aliasCanonical = alias
               .toLowerCase()
               .replace(/[^a-z0-9]+/g, '-')
               .replace(/^-|-$/g, '')
 
-            const aliasMatch = await db.query.entities.findFirst({
-              where: and(
-                eq(entities.campaignId, params.campaignId),
-                ilike(entities.canonicalName, aliasCanonical)
-              ),
-              columns: {
-                id: true,
-                name: true,
-                entityType: true,
-                aliases: true,
-                canonicalName: true,
-              },
-            })
-
+            const aliasMatch = canonicalMap.get(aliasCanonical)
             if (aliasMatch) {
               existingEntityMatches.push({
                 stagedTempId: staged.tempId,
