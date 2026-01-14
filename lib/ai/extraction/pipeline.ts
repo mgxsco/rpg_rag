@@ -560,11 +560,19 @@ export async function runExtractionPipeline(
       message: `Extracting entities from chunks ${batchStart + 1}-${batchEnd}/${totalChunks}`
     })
 
-    // Process batch in parallel
+    // Process batch in parallel with per-chunk timeout
     const batchPromises = batchChunks.map(async (chunk, idx) => {
       const chunkIndex = batchStart + idx
       try {
-        const extraction = await extractFromChunk(chunk, chunkIndex, totalChunks, language, aggressiveness, customPrompts)
+        // Timeout for individual chunk (20 seconds)
+        const chunkTimeout = new Promise<ChunkExtraction>((_, reject) =>
+          setTimeout(() => reject(new Error(`Chunk ${chunkIndex + 1} timed out`)), 20000)
+        )
+
+        const extraction = await Promise.race([
+          extractFromChunk(chunk, chunkIndex, totalChunks, language, aggressiveness, customPrompts),
+          chunkTimeout,
+        ])
 
         // Filter entities by confidence threshold
         extraction.entities = extraction.entities.filter(e => e.confidence >= confidenceThreshold)
