@@ -98,8 +98,6 @@ export default async function NoteViewPage({
                   <ExtractEntitiesButton
                     campaignId={params.campaignId}
                     noteSlug={params.slug}
-                    noteTitle={note.title}
-                    noteContent={note.content || ''}
                   />
                   <Link href={`/campaigns/${params.campaignId}/notes/${params.slug}/history`}>
                     <Button variant="outline" size="sm">
