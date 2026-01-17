@@ -219,39 +219,66 @@ function parseExtractionResponse(responseText: string, chunkIndex: number): {
   entities: EntityMention[]
   relationships: RelationshipMention[]
 } {
+  let jsonStr = responseText.trim()
+
+  // Extract JSON from code blocks or raw
+  const codeBlockMatch = jsonStr.match(/```(?:json)?[\s\n]*([\s\S]*?)```/)
+  if (codeBlockMatch) {
+    jsonStr = codeBlockMatch[1].trim()
+  } else {
+    const objMatch = jsonStr.match(/\{[\s\S]*/)
+    if (objMatch) {
+      jsonStr = objMatch[0]
+    }
+  }
+
+  // Method 1: Try direct parse
   try {
-    let jsonStr = responseText.trim()
-
-    // Extract JSON from code blocks or raw
-    const codeBlockMatch = jsonStr.match(/```(?:json)?[\s\n]*([\s\S]*?)```/)
-    if (codeBlockMatch) {
-      jsonStr = codeBlockMatch[1].trim()
-    } else {
-      const objMatch = jsonStr.match(/\{[\s\S]*/)
-      if (objMatch) {
-        jsonStr = objMatch[0]
-      }
-    }
-
-    // Try to parse, with repair if needed
-    let result: any
-    try {
-      result = JSON.parse(jsonStr)
-    } catch {
-      console.log(`[Extract-Chunk] Chunk ${chunkIndex + 1}: Attempting JSON repair...`)
-      const repaired = repairTruncatedJson(jsonStr)
-      result = JSON.parse(repaired)
-    }
-
+    const result = JSON.parse(jsonStr)
+    const entities = (result.entities || []).filter((e: any) => e.name && e.type)
+    console.log(`[Extract-Chunk] Chunk ${chunkIndex + 1}: Direct parse succeeded - ${entities.length} entities`)
     return {
-      entities: (result.entities || []).filter((e: any) => e.name && e.type),
+      entities,
       relationships: (result.relationships || []).filter((r: any) => r.sourceEntity && r.targetEntity),
     }
-  } catch (error) {
-    console.error(`[Extract-Chunk] Chunk ${chunkIndex + 1} parsing error:`, error)
-    // Try regex extraction as fallback
-    return extractPartialEntities(responseText)
+  } catch (e) {
+    console.log(`[Extract-Chunk] Chunk ${chunkIndex + 1}: Direct parse failed, trying repair...`)
   }
+
+  // Method 2: Try JSON repair
+  try {
+    const repaired = repairTruncatedJson(jsonStr)
+    const result = JSON.parse(repaired)
+    const entities = (result.entities || []).filter((e: any) => e.name && e.type)
+    console.log(`[Extract-Chunk] Chunk ${chunkIndex + 1}: Repair succeeded - ${entities.length} entities`)
+    return {
+      entities,
+      relationships: (result.relationships || []).filter((r: any) => r.sourceEntity && r.targetEntity),
+    }
+  } catch (e) {
+    console.log(`[Extract-Chunk] Chunk ${chunkIndex + 1}: Repair failed, trying entity-by-entity extraction...`)
+  }
+
+  // Method 3: Extract individual entity objects using regex
+  const regexEntities = extractEntitiesWithRegex(jsonStr)
+  if (regexEntities.length > 0) {
+    console.log(`[Extract-Chunk] Chunk ${chunkIndex + 1}: Regex extraction recovered ${regexEntities.length} entities`)
+    return { entities: regexEntities, relationships: [] }
+  }
+
+  // Method 4: Try to parse the entities array separately
+  const entitiesArrayMatch = jsonStr.match(/"entities"\s*:\s*\[([\s\S]*?)(?:\]|$)/)
+  if (entitiesArrayMatch) {
+    const arrayContent = entitiesArrayMatch[1]
+    const individualEntities = extractEntitiesFromArrayContent(arrayContent)
+    if (individualEntities.length > 0) {
+      console.log(`[Extract-Chunk] Chunk ${chunkIndex + 1}: Array extraction recovered ${individualEntities.length} entities`)
+      return { entities: individualEntities, relationships: [] }
+    }
+  }
+
+  console.error(`[Extract-Chunk] Chunk ${chunkIndex + 1}: All parsing methods failed`)
+  return { entities: [], relationships: [] }
 }
 
 // Repair truncated JSON
@@ -307,18 +334,20 @@ function repairTruncatedJson(jsonStr: string): string {
   return str
 }
 
-// Extract entities from partial JSON using regex
-function extractPartialEntities(text: string): {
-  entities: EntityMention[]
-  relationships: RelationshipMention[]
-} {
+// Extract entities using multiple regex patterns
+function extractEntitiesWithRegex(text: string): EntityMention[] {
   const entities: EntityMention[] = []
+  const seenNames = new Set<string>()
 
-  const entityPattern = /\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"type"\s*:\s*"([^"]+)"[^}]*(?:"aliases"\s*:\s*\[([^\]]*)\][^}]*)?(?:"description"\s*:\s*"([^"]*)"[^}]*)?(?:"confidence"\s*:\s*([\d.]+)[^}]*)?\}/g
+  // Pattern 1: Full entity object
+  const fullPattern = /\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"type"\s*:\s*"([^"]+)"[^}]*(?:"aliases"\s*:\s*\[([^\]]*)\][^}]*)?(?:"description"\s*:\s*"([^"]*)"[^}]*)?(?:"confidence"\s*:\s*([\d.]+)[^}]*)?\}/g
 
   let match
-  while ((match = entityPattern.exec(text)) !== null) {
+  while ((match = fullPattern.exec(text)) !== null) {
     const name = match[1]
+    if (seenNames.has(name.toLowerCase())) continue
+    seenNames.add(name.toLowerCase())
+
     const type = match[2]
     const aliasesStr = match[3] || ''
     const description = match[4] || ''
@@ -337,5 +366,89 @@ function extractPartialEntities(text: string): {
     }
   }
 
-  return { entities, relationships: [] }
+  // Pattern 2: Simpler pattern for partial objects
+  const simplePattern = /"name"\s*:\s*"([^"]+)"[^}]*"type"\s*:\s*"([^"]+)"/g
+  while ((match = simplePattern.exec(text)) !== null) {
+    const name = match[1]
+    if (seenNames.has(name.toLowerCase())) continue
+    seenNames.add(name.toLowerCase())
+
+    const type = match[2]
+    entities.push({
+      name,
+      type,
+      aliases: [],
+      description: '',
+      confidence: 0.6,
+    })
+  }
+
+  return entities
+}
+
+// Extract entities from a partial entities array
+function extractEntitiesFromArrayContent(arrayContent: string): EntityMention[] {
+  const entities: EntityMention[] = []
+  const seenNames = new Set<string>()
+
+  // Split by }, { pattern to get individual objects
+  const objectStrings = arrayContent.split(/\}\s*,\s*\{/)
+
+  for (let i = 0; i < objectStrings.length; i++) {
+    let objStr = objectStrings[i]
+    // Add back braces
+    if (i > 0) objStr = '{' + objStr
+    if (i < objectStrings.length - 1) objStr = objStr + '}'
+
+    // Try to parse this individual object
+    try {
+      // Clean up and close the object
+      let cleanObj = objStr.trim()
+      if (!cleanObj.startsWith('{')) cleanObj = '{' + cleanObj
+      if (!cleanObj.endsWith('}')) {
+        // Try to close it properly
+        cleanObj = cleanObj.replace(/,\s*$/, '') + '}'
+      }
+
+      const obj = JSON.parse(cleanObj)
+      if (obj.name && obj.type && !seenNames.has(obj.name.toLowerCase())) {
+        seenNames.add(obj.name.toLowerCase())
+        entities.push({
+          name: obj.name,
+          type: obj.type,
+          aliases: obj.aliases || [],
+          description: obj.description || '',
+          confidence: obj.confidence || 0.7,
+        })
+      }
+    } catch {
+      // Try regex on this chunk
+      const nameMatch = objStr.match(/"name"\s*:\s*"([^"]+)"/)
+      const typeMatch = objStr.match(/"type"\s*:\s*"([^"]+)"/)
+
+      if (nameMatch && typeMatch) {
+        const name = nameMatch[1]
+        if (!seenNames.has(name.toLowerCase())) {
+          seenNames.add(name.toLowerCase())
+          entities.push({
+            name,
+            type: typeMatch[1],
+            aliases: [],
+            description: '',
+            confidence: 0.5,
+          })
+        }
+      }
+    }
+  }
+
+  return entities
+}
+
+// Legacy function for compatibility
+function extractPartialEntities(text: string): {
+  entities: EntityMention[]
+  relationships: RelationshipMention[]
+} {
+  return { entities: extractEntitiesWithRegex(text), relationships: [] }
 }
