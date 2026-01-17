@@ -3,7 +3,7 @@ import { getSession } from '@/lib/auth'
 import { db, campaigns, campaignMembers, entities } from '@/lib/db'
 import { eq, and } from 'drizzle-orm'
 import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
-import { EntityExtractionWithReview } from '@/components/entities/entity-extraction-with-review'
+import { SteppedExtractionWizard } from '@/components/extraction/stepped-extraction-wizard'
 
 export default async function EntityExtractPage({
   params,
@@ -52,12 +52,14 @@ export default async function EntityExtractPage({
     <div className="flex gap-6">
       <CampaignSidebar campaignId={params.campaignId} isDM={isDM} />
       <div className="flex-1 min-w-0">
-        <EntityExtractionWithReview
+        <SteppedExtractionWizard
           campaignId={params.campaignId}
-          entityId={params.entityId}
-          entityName={entity.name}
-          entityContent={entity.content || ''}
-          entityType={entity.entityType}
+          content={entity.content || ''}
+          title={entity.name}
+          sourceType="entity"
+          sourceId={entity.id}
+          backUrl={`/campaigns/${params.campaignId}/entities/${entity.id}`}
+          backLabel={`Back to ${entity.name}`}
         />
       </div>
     </div>
