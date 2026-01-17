@@ -3,7 +3,7 @@ import { getSession } from '@/lib/auth'
 import { db, campaigns, campaignMembers, notes } from '@/lib/db'
 import { eq, and } from 'drizzle-orm'
 import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
-import { NoteExtractionWithReview } from '@/components/notes/note-extraction-with-review'
+import { SteppedExtractionWizard } from '@/components/extraction/stepped-extraction-wizard'
 
 export default async function NoteExtractPage({
   params,
@@ -52,11 +52,14 @@ export default async function NoteExtractPage({
     <div className="flex gap-6">
       <CampaignSidebar campaignId={params.campaignId} isDM={isDM} />
       <div className="flex-1 min-w-0">
-        <NoteExtractionWithReview
+        <SteppedExtractionWizard
           campaignId={params.campaignId}
-          noteSlug={params.slug}
-          noteTitle={note.title}
-          noteContent={note.content || ''}
+          content={note.content || ''}
+          title={note.title}
+          sourceType="note"
+          sourceId={note.id}
+          backUrl={`/campaigns/${params.campaignId}/notes/${params.slug}`}
+          backLabel="Back to note"
         />
       </div>
     </div>
