@@ -128,15 +128,22 @@ CRITICAL: Extract 20-50+ entities from typical session notes. Use the MOST SPECI
  * These values are used when settings are not explicitly configured
  */
 export const DEFAULT_SETTINGS: Required<{
+  model: Required<NonNullable<CampaignSettings['model']>>
   extraction: Required<NonNullable<CampaignSettings['extraction']>>
   visibility: Required<NonNullable<CampaignSettings['visibility']>>
   search: Required<NonNullable<CampaignSettings['search']>>
   graph: Required<NonNullable<CampaignSettings['graph']>>
   prompts: Required<NonNullable<CampaignSettings['prompts']>>
 }> = {
+  model: {
+    chatModel: 'claude-sonnet-4-20250514',
+    extractionModel: 'claude-3-5-haiku-20241022',
+    temperature: 0.7,
+    maxTokens: 1024,
+  },
   extraction: {
     aggressiveness: 'obsessive',
-    chunkSize: 6000,
+    chunkSize: 2000, // Smaller chunks for reliable serverless extraction
     confidenceThreshold: 0.5,
     enableAutoMerge: false,
     enableRelationships: true,
@@ -169,6 +176,10 @@ export function getCampaignSettings(settings?: CampaignSettings | null): typeof 
   if (!settings) return DEFAULT_SETTINGS
 
   return {
+    model: {
+      ...DEFAULT_SETTINGS.model,
+      ...(settings.model || {}),
+    },
     extraction: {
       ...DEFAULT_SETTINGS.extraction,
       ...(settings.extraction || {}),
@@ -218,19 +229,19 @@ export const AGGRESSIVENESS_OPTIONS = [
  */
 export const CHUNK_SIZE_OPTIONS = [
   {
+    value: 2000,
+    label: 'Small (2000 chars)',
+    description: 'Most reliable, best for serverless',
+  },
+  {
     value: 3000,
-    label: 'Small (3000 chars)',
-    description: 'More detailed extraction, slower processing',
+    label: 'Medium (3000 chars)',
+    description: 'Recommended for Vercel deployment',
   },
   {
-    value: 6000,
-    label: 'Medium (6000 chars)',
-    description: 'Recommended balance of detail and speed',
-  },
-  {
-    value: 10000,
-    label: 'Large (10000 chars)',
-    description: 'Faster processing, may miss subtle connections',
+    value: 5000,
+    label: 'Large (5000 chars)',
+    description: 'Faster but may timeout on slow models',
   },
 ]
 
@@ -241,4 +252,61 @@ export const LINK_LABEL_OPTIONS = [
   { value: 'always' as const, label: 'Always visible' },
   { value: 'on-hover' as const, label: 'Show on hover' },
   { value: 'never' as const, label: 'Never show' },
+]
+
+/**
+ * Available AI models for chat
+ */
+export const CHAT_MODEL_OPTIONS = [
+  {
+    value: 'claude-sonnet-4-20250514' as const,
+    label: 'Claude Sonnet 4',
+    description: 'Balanced performance and speed',
+  },
+  {
+    value: 'claude-3-5-haiku-20241022' as const,
+    label: 'Claude Haiku 3.5',
+    description: 'Fastest Claude, lower cost',
+  },
+  {
+    value: 'claude-opus-4-20250514' as const,
+    label: 'Claude Opus 4',
+    description: 'Best reasoning, highest quality',
+  },
+  {
+    value: 'gemini-3-flash-preview' as const,
+    label: 'Gemini 3 Flash',
+    description: 'Google AI, latest and fastest',
+  },
+  {
+    value: 'gemini-2.5-flash' as const,
+    label: 'Gemini 2.5 Flash',
+    description: 'Google AI, stable version',
+  },
+]
+
+/**
+ * Available AI models for extraction
+ */
+export const EXTRACTION_MODEL_OPTIONS = [
+  {
+    value: 'claude-3-5-haiku-20241022' as const,
+    label: 'Claude Haiku 3.5',
+    description: 'Fast extraction, good for large documents',
+  },
+  {
+    value: 'claude-sonnet-4-20250514' as const,
+    label: 'Claude Sonnet 4',
+    description: 'More accurate, slower processing',
+  },
+  {
+    value: 'gemini-3-flash-preview' as const,
+    label: 'Gemini 3 Flash',
+    description: 'Google AI, latest and fastest',
+  },
+  {
+    value: 'gemini-2.5-flash' as const,
+    label: 'Gemini 2.5 Flash',
+    description: 'Google AI, stable version',
+  },
 ]

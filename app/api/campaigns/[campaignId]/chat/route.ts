@@ -16,13 +16,7 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Check if ANTHROPIC_API_KEY is configured
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return NextResponse.json({
-      content: 'Chat is not available. ANTHROPIC_API_KEY is not configured in environment variables.',
-      sources: [],
-    })
-  }
+  // Note: AI availability is now checked per-model in the chat module
 
   // Check membership
   const membership = await db.query.campaignMembers.findFirst({

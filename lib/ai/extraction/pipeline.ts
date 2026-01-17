@@ -1,6 +1,6 @@
-import Anthropic from '@anthropic-ai/sdk'
-import { CampaignSettings } from '@/lib/db/schema'
+import { CampaignSettings, AIModel } from '@/lib/db/schema'
 import { getCampaignSettings, DEFAULT_PROMPTS } from '@/lib/campaign-settings'
+import { generateSimple } from '@/lib/ai/client'
 
 // ============================================
 // Types
@@ -39,14 +39,112 @@ export interface ExtractionResult {
 }
 
 // ============================================
-// Anthropic Client
+// JSON Repair Helpers for truncated AI responses
 // ============================================
 
-function getAnthropicClient(): Anthropic {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY is not configured')
+/**
+ * Attempt to repair truncated JSON by closing unclosed brackets/braces
+ */
+function repairTruncatedJson(jsonStr: string): string {
+  let str = jsonStr.trim()
+
+  // Remove any trailing incomplete string value (ends with unclosed quote)
+  // Match patterns like: "key": "incomplete value... or "key": "value", "incomplete...
+  str = str.replace(/,\s*"[^"]*"?\s*:\s*"[^"]*$/, '')
+  str = str.replace(/,\s*"[^"]*$/, '')
+
+  // Count brackets and braces
+  let openBraces = 0
+  let openBrackets = 0
+  let inString = false
+  let escape = false
+
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i]
+
+    if (escape) {
+      escape = false
+      continue
+    }
+
+    if (char === '\\' && inString) {
+      escape = true
+      continue
+    }
+
+    if (char === '"') {
+      inString = !inString
+      continue
+    }
+
+    if (!inString) {
+      if (char === '{') openBraces++
+      else if (char === '}') openBraces--
+      else if (char === '[') openBrackets++
+      else if (char === ']') openBrackets--
+    }
   }
-  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+  // If we're in a string, try to close it
+  if (inString) {
+    str += '"'
+  }
+
+  // Remove trailing comma if present
+  str = str.replace(/,\s*$/, '')
+
+  // Close any open brackets/braces
+  while (openBrackets > 0) {
+    str += ']'
+    openBrackets--
+  }
+  while (openBraces > 0) {
+    str += '}'
+    openBraces--
+  }
+
+  return str
+}
+
+/**
+ * Extract any valid entities from partial/malformed JSON using regex
+ */
+function extractPartialEntities(text: string): ChunkExtraction {
+  const entities: EntityMention[] = []
+
+  // Try to find individual entity objects in the text
+  // Pattern: {"name": "...", "type": "...", ...}
+  const entityPattern = /\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"type"\s*:\s*"([^"]+)"[^}]*(?:"aliases"\s*:\s*\[([^\]]*)\][^}]*)?(?:"description"\s*:\s*"([^"]*)"[^}]*)?(?:"confidence"\s*:\s*([\d.]+)[^}]*)?\}/g
+
+  let match
+  while ((match = entityPattern.exec(text)) !== null) {
+    const name = match[1]
+    const type = match[2]
+    const aliasesStr = match[3] || ''
+    const description = match[4] || ''
+    const confidence = parseFloat(match[5]) || 0.7
+
+    // Parse aliases
+    const aliases: string[] = []
+    const aliasMatches = aliasesStr.match(/"([^"]+)"/g)
+    if (aliasMatches) {
+      for (const a of aliasMatches) {
+        aliases.push(a.replace(/"/g, ''))
+      }
+    }
+
+    if (name && type) {
+      entities.push({
+        name,
+        type,
+        aliases,
+        description,
+        confidence,
+      })
+    }
+  }
+
+  return { entities, relationships: [] }
 }
 
 // Language code to name mapping
@@ -191,11 +289,10 @@ async function extractFromChunk(
   totalChunks: number,
   language: string = 'en',
   aggressiveness: 'conservative' | 'balanced' | 'obsessive' = 'obsessive',
-  customPrompts?: CustomPrompts
+  customPrompts?: CustomPrompts,
+  model: AIModel = 'claude-3-5-haiku-20241022'
 ): Promise<ChunkExtraction> {
-  console.log(`[Extraction] Processing chunk ${chunkIndex + 1}/${totalChunks} (${content.length} chars, lang: ${language}, mode: ${aggressiveness})`)
-
-  const anthropic = getAnthropicClient()
+  console.log(`[Extraction] Processing chunk ${chunkIndex + 1}/${totalChunks} (${content.length} chars, lang: ${language}, mode: ${aggressiveness}, model: ${model})`)
 
   const languageInstruction = language !== 'en'
     ? `IMPORTANT: The content is in ${getLanguageName(language)}. Extract entity names as they appear in the original language, but you may provide descriptions in ${getLanguageName(language)} as well.`
@@ -203,36 +300,37 @@ async function extractFromChunk(
 
   const systemPrompt = getExtractionSystemPrompt(aggressiveness, languageInstruction, customPrompts)
 
-  const response = await anthropic.messages.create({
-    model: 'claude-3-5-haiku-20241022',
-    max_tokens: 8192,
-    system: systemPrompt,
-    messages: [{
-      role: 'user',
-      content: content,
-    }],
-  })
+  const responseText = await generateSimple(model, systemPrompt, content, 8192)
 
-  const textContent = response.content.find((block) => block.type === 'text')
-  if (!textContent || textContent.type !== 'text') {
+  if (!responseText) {
     return { entities: [], relationships: [] }
   }
 
   try {
-    let jsonStr = textContent.text.trim()
+    let jsonStr = responseText.trim()
 
     // Extract JSON from code blocks or raw
     const codeBlockMatch = jsonStr.match(/```(?:json)?[\s\n]*([\s\S]*?)```/)
     if (codeBlockMatch) {
       jsonStr = codeBlockMatch[1].trim()
     } else {
-      const objMatch = jsonStr.match(/\{[\s\S]*\}/)
+      const objMatch = jsonStr.match(/\{[\s\S]*/)
       if (objMatch) {
         jsonStr = objMatch[0]
       }
     }
 
-    const result = JSON.parse(jsonStr) as ChunkExtraction
+    // Try to parse, with repair if needed
+    let result: ChunkExtraction
+    try {
+      result = JSON.parse(jsonStr) as ChunkExtraction
+    } catch {
+      // Try to repair truncated JSON
+      console.log(`[Extraction] Chunk ${chunkIndex + 1}: Attempting JSON repair...`)
+      const repaired = repairTruncatedJson(jsonStr)
+      result = JSON.parse(repaired) as ChunkExtraction
+    }
+
     console.log(`[Extraction] Chunk ${chunkIndex + 1}: ${result.entities?.length || 0} entities, ${result.relationships?.length || 0} relationships`)
 
     return {
@@ -241,6 +339,12 @@ async function extractFromChunk(
     }
   } catch (error) {
     console.error(`[Extraction] Chunk ${chunkIndex + 1} parsing error:`, error)
+    // Try to extract any valid entities from partial JSON
+    const partialResult = extractPartialEntities(responseText)
+    if (partialResult.entities.length > 0) {
+      console.log(`[Extraction] Chunk ${chunkIndex + 1}: Recovered ${partialResult.entities.length} entities from partial JSON`)
+      return partialResult
+    }
     return { entities: [], relationships: [] }
   }
 }
@@ -503,6 +607,7 @@ export interface ExtractionSettings {
   maxChunks?: number // Limit chunks to avoid timeout (default: 15)
   parallelBatchSize?: number // Process N chunks in parallel (default: 3)
   customPrompts?: CustomPrompts // Custom extraction prompts
+  extractionModel?: AIModel // Model to use for extraction
 }
 
 export async function runExtractionPipeline(
@@ -514,17 +619,18 @@ export async function runExtractionPipeline(
   settings?: ExtractionSettings
 ): Promise<ExtractionResult> {
   // Get settings with defaults
-  const chunkSize = settings?.chunkSize ?? 6000 // Larger default for fewer chunks
+  const chunkSize = settings?.chunkSize ?? 2000 // Smaller chunks for serverless reliability
   const aggressiveness = settings?.aggressiveness ?? 'obsessive'
   const confidenceThreshold = settings?.confidenceThreshold ?? 0.5
   const enableRelationships = settings?.enableRelationships ?? true
   const maxChunks = settings?.maxChunks ?? 15 // Limit to avoid Vercel timeout
   const parallelBatchSize = settings?.parallelBatchSize ?? 3 // Process 3 chunks in parallel
   const customPrompts = settings?.customPrompts
+  const extractionModel = settings?.extractionModel ?? 'claude-3-5-haiku-20241022'
 
   console.log(`[Extraction] Starting pipeline for ${fileName}`)
   console.log(`[Extraction] Content length: ${content.length} chars, language: ${language}`)
-  console.log(`[Extraction] Settings: chunkSize=${chunkSize}, aggressiveness=${aggressiveness}, confidence=${confidenceThreshold}, maxChunks=${maxChunks}`)
+  console.log(`[Extraction] Settings: chunkSize=${chunkSize}, aggressiveness=${aggressiveness}, confidence=${confidenceThreshold}, maxChunks=${maxChunks}, model=${extractionModel}`)
   console.log(`[Extraction] Existing entities: ${existingEntityNames.length}`)
 
   // Chunk the document using configured chunk size
@@ -570,7 +676,7 @@ export async function runExtractionPipeline(
         )
 
         const extraction = await Promise.race([
-          extractFromChunk(chunk, chunkIndex, totalChunks, language, aggressiveness, customPrompts),
+          extractFromChunk(chunk, chunkIndex, totalChunks, language, aggressiveness, customPrompts, extractionModel),
           chunkTimeout,
         ])
 

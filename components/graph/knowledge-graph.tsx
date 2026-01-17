@@ -3,9 +3,36 @@
 import { useRef, useCallback, useEffect, useState, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import { getEntityTypeColor } from '@/lib/entity-colors'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  Network,
+  GitBranch,
+  Circle,
+  Box,
+  ArrowDown,
+  ArrowUp,
+  ArrowRight,
+  ArrowLeft,
+  Target,
+  Zap,
+  Snowflake,
+  Gauge,
+} from 'lucide-react'
 
-// Dynamically import force graph to avoid SSR issues
+// Dynamically import force graphs to avoid SSR issues
 const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), {
+  ssr: false,
+})
+
+const ForceGraph3D = dynamic(() => import('react-force-graph-3d'), {
   ssr: false,
 })
 
@@ -38,6 +65,67 @@ interface KnowledgeGraphProps {
   centerId?: string | null
 }
 
+// Layout modes for 2D graph
+type LayoutMode = 'force' | 'td' | 'bu' | 'lr' | 'rl' | 'radialout' | 'radialin' | null
+type ViewMode = '2d' | '3d'
+type PhysicsPreset = 'default' | 'fast' | 'slow' | 'frozen'
+
+interface LayoutOption {
+  mode: LayoutMode
+  label: string
+  icon: React.ReactNode
+  description: string
+}
+
+interface PhysicsOption {
+  preset: PhysicsPreset
+  label: string
+  icon: React.ReactNode
+  config: {
+    d3AlphaDecay: number
+    d3VelocityDecay: number
+    cooldownTicks: number
+    warmupTicks: number
+  }
+}
+
+const layoutOptions: LayoutOption[] = [
+  { mode: 'force', label: 'Force', icon: <Network className="h-4 w-4" />, description: 'Classic force-directed' },
+  { mode: 'td', label: 'Tree Down', icon: <ArrowDown className="h-4 w-4" />, description: 'Top-down hierarchy' },
+  { mode: 'bu', label: 'Tree Up', icon: <ArrowUp className="h-4 w-4" />, description: 'Bottom-up hierarchy' },
+  { mode: 'lr', label: 'Tree Right', icon: <ArrowRight className="h-4 w-4" />, description: 'Left-to-right flow' },
+  { mode: 'rl', label: 'Tree Left', icon: <ArrowLeft className="h-4 w-4" />, description: 'Right-to-left flow' },
+  { mode: 'radialout', label: 'Radial Out', icon: <Target className="h-4 w-4" />, description: 'Radial from center' },
+  { mode: 'radialin', label: 'Radial In', icon: <Circle className="h-4 w-4" />, description: 'Radial inward' },
+]
+
+const physicsOptions: PhysicsOption[] = [
+  {
+    preset: 'default',
+    label: 'Balanced',
+    icon: <Gauge className="h-4 w-4" />,
+    config: { d3AlphaDecay: 0.02, d3VelocityDecay: 0.3, cooldownTicks: 100, warmupTicks: 0 },
+  },
+  {
+    preset: 'fast',
+    label: 'Fast',
+    icon: <Zap className="h-4 w-4" />,
+    config: { d3AlphaDecay: 0.05, d3VelocityDecay: 0.4, cooldownTicks: 50, warmupTicks: 0 },
+  },
+  {
+    preset: 'slow',
+    label: 'Smooth',
+    icon: <Snowflake className="h-4 w-4" />,
+    config: { d3AlphaDecay: 0.01, d3VelocityDecay: 0.2, cooldownTicks: 200, warmupTicks: 0 },
+  },
+  {
+    preset: 'frozen',
+    label: 'Instant',
+    icon: <Snowflake className="h-4 w-4" />,
+    config: { d3AlphaDecay: 1, d3VelocityDecay: 1, cooldownTicks: 0, warmupTicks: 200 },
+  },
+]
+
 // Use centralized entity colors for graph visualization
 function getTypeColor(type: string): string {
   const colors = getEntityTypeColor(type)
@@ -52,11 +140,17 @@ export function KnowledgeGraph({
 }: KnowledgeGraphProps) {
   const graphRef = useRef<any>(null)
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
-  // Use refs for hover state to avoid re-renders that restart the simulation
   const hoveredNodeRef = useRef<string | null>(null)
   const hoveredLinkRef = useRef<string | null>(null)
-  // Only use state for the tooltip display
   const [tooltipNode, setTooltipNode] = useState<string | null>(null)
+
+  // Layout and view state
+  const [viewMode, setViewMode] = useState<ViewMode>('2d')
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>('force')
+  const [physicsPreset, setPhysicsPreset] = useState<PhysicsPreset>('default')
+
+  const currentLayout = layoutOptions.find((l) => l.mode === layoutMode) || layoutOptions[0]
+  const currentPhysics = physicsOptions.find((p) => p.preset === physicsPreset) || physicsOptions[0]
 
   useEffect(() => {
     const updateDimensions = () => {
@@ -69,9 +163,7 @@ export function KnowledgeGraph({
       }
     }
 
-    // Initial update
     updateDimensions()
-    // Delayed update to catch any layout shifts
     setTimeout(updateDimensions, 100)
 
     window.addEventListener('resize', updateDimensions)
@@ -79,24 +171,31 @@ export function KnowledgeGraph({
   }, [])
 
   useEffect(() => {
-    // Zoom to fit after data loads
     if (graphRef.current && data.nodes.length > 0) {
       setTimeout(() => {
         graphRef.current?.zoomToFit(400, 50)
       }, 500)
     }
-  }, [data])
+  }, [data, viewMode, layoutMode])
 
-  // Center on specific node if centerId changes
   useEffect(() => {
     if (graphRef.current && centerId) {
-      const node = data.nodes.find(n => n.id === centerId)
+      const node = data.nodes.find((n) => n.id === centerId)
       if (node) {
-        graphRef.current.centerAt((node as any).x, (node as any).y, 500)
-        graphRef.current.zoom(2, 500)
+        if (viewMode === '2d') {
+          graphRef.current.centerAt((node as any).x, (node as any).y, 500)
+          graphRef.current.zoom(2, 500)
+        } else {
+          // 3D centering
+          graphRef.current.cameraPosition(
+            { x: (node as any).x, y: (node as any).y, z: 300 },
+            node,
+            1000
+          )
+        }
       }
     }
-  }, [centerId, data.nodes])
+  }, [centerId, data.nodes, viewMode])
 
   const handleNodeClick = useCallback(
     (node: any) => {
@@ -135,10 +234,9 @@ export function KnowledgeGraph({
       const isHovered = hoveredNodeRef.current === node.id
       const isCentered = centerId === node.id
 
-      // Node size based on connections (use precomputed counts)
       const linkCount = nodeLinkCounts.get(node.id) || 0
       const baseSize = 8 + Math.min(linkCount * 2, 12)
-      const nodeSize = isHovered ? baseSize * 1.3 : (isCentered ? baseSize * 1.2 : baseSize)
+      const nodeSize = isHovered ? baseSize * 1.3 : isCentered ? baseSize * 1.2 : baseSize
 
       // Draw glow effect for hovered/centered nodes
       if (isHovered || isCentered) {
@@ -156,7 +254,7 @@ export function KnowledgeGraph({
 
       // Draw border - golden highlight
       ctx.strokeStyle = isHovered || isCentered ? '#d4a942' : 'rgba(212, 169, 66, 0.4)'
-      ctx.lineWidth = (isHovered || isCentered ? 2.5 : 1.5) / globalScale
+      ctx.lineWidth = ((isHovered || isCentered ? 2.5 : 1.5) / globalScale)
       ctx.stroke()
 
       // Draw label
@@ -189,8 +287,10 @@ export function KnowledgeGraph({
 
       if (!start.x || !end.x) return
 
-      const isHovered = hoveredLinkRef.current === link.id ||
-        hoveredNodeRef.current === start.id || hoveredNodeRef.current === end.id
+      const isHovered =
+        hoveredLinkRef.current === link.id ||
+        hoveredNodeRef.current === start.id ||
+        hoveredNodeRef.current === end.id
 
       // Draw line - parchment/golden tones
       ctx.beginPath()
@@ -228,75 +328,224 @@ export function KnowledgeGraph({
         ctx.fillText(labelText, midX, midY)
       }
     },
-    [] // No dependencies - refs don't trigger re-renders
+    []
   )
 
-  // Memoize graph data transformation to prevent unnecessary re-renders
-  const graphData = useMemo(() => ({
-    nodes: (data.nodes || []).map((node) => ({
-      ...node,
-    })),
-    links: (data.links || []).map((link) => ({
-      ...link,
-      source: typeof link.source === 'string' ? link.source : link.source.id,
-      target: typeof link.target === 'string' ? link.target : link.target.id,
-    })),
-  }), [data])
+  // 3D node rendering
+  const nodeThreeObject = useCallback(
+    (node: any) => {
+      // Return null to use default sphere rendering
+      // The color is set via nodeColor prop
+      return null
+    },
+    []
+  )
+
+  // Memoize graph data transformation
+  const graphData = useMemo(
+    () => ({
+      nodes: (data.nodes || []).map((node) => ({
+        ...node,
+      })),
+      links: (data.links || []).map((link) => ({
+        ...link,
+        source: typeof link.source === 'string' ? link.source : link.source.id,
+        target: typeof link.target === 'string' ? link.target : link.target.id,
+      })),
+    }),
+    [data]
+  )
+
+  // Common props for both 2D and 3D
+  const commonProps = {
+    ref: graphRef,
+    graphData: graphData,
+    width: dimensions.width,
+    height: dimensions.height,
+    onNodeClick: handleNodeClick,
+    onNodeRightClick: handleNodeRightClick,
+    onNodeHover: (node: any) => {
+      hoveredNodeRef.current = node?.id || null
+      setTooltipNode(node?.id || null)
+    },
+    onLinkHover: (link: any) => {
+      hoveredLinkRef.current = link?.id || null
+    },
+    linkDirectionalArrowLength: 4,
+    linkDirectionalArrowRelPos: 0.9,
+    backgroundColor: '#2a2318',
+    nodeColor: (node: any) => getTypeColor(node.type),
+    linkColor: () => 'rgba(139, 119, 90, 0.4)',
+    ...currentPhysics.config,
+  }
+
+  // DAG mode props (only for 2D)
+  const dagProps =
+    layoutMode && layoutMode !== 'force'
+      ? {
+          dagMode: layoutMode,
+          dagLevelDistance: 60,
+        }
+      : {}
 
   return (
-    <div id="knowledge-graph-container" className="w-full h-full bg-[#2a2318] relative border-2 border-[hsl(30_25%_30%)]">
-      <ForceGraph2D
-        ref={graphRef}
-        graphData={graphData}
-        width={dimensions.width}
-        height={dimensions.height}
-        nodeCanvasObject={nodeCanvasObject}
-        linkCanvasObject={linkCanvasObject}
-        nodePointerAreaPaint={(node: any, color, ctx) => {
-          const linkCount = nodeLinkCounts.get(node.id) || 0
-          const baseSize = 8 + Math.min(linkCount * 2, 12)
-          ctx.beginPath()
-          ctx.arc(node.x, node.y, baseSize + 5, 0, 2 * Math.PI, false)
-          ctx.fillStyle = color
-          ctx.fill()
-        }}
-        onNodeClick={handleNodeClick}
-        onNodeRightClick={handleNodeRightClick}
-        onNodeHover={(node: any) => {
-          hoveredNodeRef.current = node?.id || null
-          setTooltipNode(node?.id || null) // Only this triggers re-render for tooltip
-        }}
-        onLinkHover={(link: any) => {
-          hoveredLinkRef.current = link?.id || null
-        }}
-        linkDirectionalArrowLength={4}
-        linkDirectionalArrowRelPos={0.9}
-        linkCurvature={0.1}
-        backgroundColor="#2a2318"
-        cooldownTicks={100}
-        d3AlphaDecay={0.02}
-        d3VelocityDecay={0.3}
-        onEngineStop={() => {
-          if (!centerId) {
-            graphRef.current?.zoomToFit(400, 50)
-          }
-        }}
-      />
+    <div
+      id="knowledge-graph-container"
+      className="w-full h-full bg-[#2a2318] relative border-2 border-[hsl(30_25%_30%)]"
+    >
+      {/* Controls */}
+      <div className="absolute top-3 right-3 z-10 flex gap-2">
+        {/* View Mode Toggle (2D/3D) */}
+        <div className="flex bg-[#3d3426] rounded-md border border-[#6b5a45] overflow-hidden">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`rounded-none px-3 ${viewMode === '2d' ? 'bg-[#4d4436] text-[#e8dcc8]' : 'text-[#8a7a66] hover:text-[#e8dcc8]'}`}
+            onClick={() => setViewMode('2d')}
+          >
+            <Network className="h-4 w-4 mr-1" />
+            2D
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`rounded-none px-3 ${viewMode === '3d' ? 'bg-[#4d4436] text-[#e8dcc8]' : 'text-[#8a7a66] hover:text-[#e8dcc8]'}`}
+            onClick={() => setViewMode('3d')}
+          >
+            <Box className="h-4 w-4 mr-1" />
+            3D
+          </Button>
+        </div>
 
-      {/* Tooltip for hovered node - parchment style */}
-      {tooltipNode && (
+        {/* Layout Mode Dropdown (only for 2D) */}
+        {viewMode === '2d' && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="bg-[#3d3426] border-[#6b5a45] text-[#e8dcc8] hover:bg-[#4d4436]"
+              >
+                {currentLayout.icon}
+                <span className="ml-2">{currentLayout.label}</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="bg-[#3d3426] border-[#6b5a45]">
+              <DropdownMenuLabel className="text-[#b8a88a]">Layout</DropdownMenuLabel>
+              <DropdownMenuSeparator className="bg-[#6b5a45]" />
+              {layoutOptions.map((option) => (
+                <DropdownMenuItem
+                  key={option.mode}
+                  onClick={() => setLayoutMode(option.mode)}
+                  className={`text-[#e8dcc8] focus:bg-[#4d4436] focus:text-[#e8dcc8] ${
+                    layoutMode === option.mode ? 'bg-[#4d4436]' : ''
+                  }`}
+                >
+                  {option.icon}
+                  <span className="ml-2">{option.label}</span>
+                  <span className="ml-auto text-xs text-[#8a7a66]">{option.description}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
+        {/* Physics Preset Dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-[#3d3426] border-[#6b5a45] text-[#e8dcc8] hover:bg-[#4d4436]"
+            >
+              {currentPhysics.icon}
+              <span className="ml-2">{currentPhysics.label}</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="bg-[#3d3426] border-[#6b5a45]">
+            <DropdownMenuLabel className="text-[#b8a88a]">Physics</DropdownMenuLabel>
+            <DropdownMenuSeparator className="bg-[#6b5a45]" />
+            {physicsOptions.map((option) => (
+              <DropdownMenuItem
+                key={option.preset}
+                onClick={() => setPhysicsPreset(option.preset)}
+                className={`text-[#e8dcc8] focus:bg-[#4d4436] focus:text-[#e8dcc8] ${
+                  physicsPreset === option.preset ? 'bg-[#4d4436]' : ''
+                }`}
+              >
+                {option.icon}
+                <span className="ml-2">{option.label}</span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* 2D Graph */}
+      {viewMode === '2d' && (
+        <ForceGraph2D
+          {...commonProps}
+          {...dagProps}
+          nodeCanvasObject={nodeCanvasObject}
+          linkCanvasObject={linkCanvasObject}
+          nodePointerAreaPaint={(node: any, color, ctx) => {
+            const linkCount = nodeLinkCounts.get(node.id) || 0
+            const baseSize = 8 + Math.min(linkCount * 2, 12)
+            ctx.beginPath()
+            ctx.arc(node.x, node.y, baseSize + 5, 0, 2 * Math.PI, false)
+            ctx.fillStyle = color
+            ctx.fill()
+          }}
+          linkCurvature={0.1}
+          onEngineStop={() => {
+            if (!centerId) {
+              graphRef.current?.zoomToFit(400, 50)
+            }
+          }}
+        />
+      )}
+
+      {/* 3D Graph */}
+      {viewMode === '3d' && (
+        <ForceGraph3D
+          {...commonProps}
+          nodeLabel={(node: any) => `<div style="background: rgba(42,35,24,0.95); color: #e8dcc8; padding: 4px 8px; border-radius: 4px; font-family: Cinzel, serif;">${node.name}<br/><span style="color: #b8a88a; font-size: 0.8em; font-family: Crimson Pro, serif;">${node.type?.replace('_', ' ')}</span></div>`}
+          linkLabel={(link: any) => `<div style="background: rgba(42,35,24,0.95); color: #d4a942; padding: 4px 8px; border-radius: 4px;">${link.label || link.type}</div>`}
+          nodeOpacity={0.9}
+          linkOpacity={0.4}
+          linkWidth={1.5}
+          nodeResolution={16}
+          onEngineStop={() => {
+            if (!centerId) {
+              graphRef.current?.zoomToFit(400, 50)
+            }
+          }}
+        />
+      )}
+
+      {/* Tooltip for hovered node - parchment style (2D only) */}
+      {viewMode === '2d' && tooltipNode && (
         <div className="absolute top-4 left-4 bg-[#3d3426] border-2 border-[#6b5a45] rounded-sm p-3 pointer-events-none shadow-lg">
-          <p className="font-medium text-[#e8dcc8]" style={{ fontFamily: 'Cinzel, serif' }}>
-            {data.nodes.find(n => n.id === tooltipNode)?.name}
+          <p
+            className="font-medium text-[#e8dcc8]"
+            style={{ fontFamily: 'Cinzel, serif' }}
+          >
+            {data.nodes.find((n) => n.id === tooltipNode)?.name}
           </p>
-          <p className="text-sm text-[#b8a88a] capitalize" style={{ fontFamily: 'Crimson Pro, serif' }}>
-            {data.nodes.find(n => n.id === tooltipNode)?.type?.replace('_', ' ')}
+          <p
+            className="text-sm text-[#b8a88a] capitalize"
+            style={{ fontFamily: 'Crimson Pro, serif' }}
+          >
+            {data.nodes.find((n) => n.id === tooltipNode)?.type?.replace('_', ' ')}
           </p>
-          <p className="text-xs text-[#8a7a66] mt-1">
-            Click to view, right-click to center
-          </p>
+          <p className="text-xs text-[#8a7a66] mt-1">Click to view, right-click to center</p>
         </div>
       )}
+
+      {/* Help text */}
+      <div className="absolute bottom-3 left-3 text-xs text-[#6b5a45]">
+        {viewMode === '2d' ? 'Scroll to zoom • Drag to pan' : 'Drag to rotate • Scroll to zoom'}
+      </div>
     </div>
   )
 }

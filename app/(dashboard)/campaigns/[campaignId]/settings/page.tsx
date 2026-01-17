@@ -28,10 +28,11 @@ import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
 import { useToast } from '@/components/ui/use-toast'
-import { Save, Trash2, RefreshCw, Loader2, Globe, Cog, Search, Network, AlertTriangle, MessageSquare, RotateCcw, Download } from 'lucide-react'
+import { Save, Trash2, RefreshCw, Loader2, Globe, Cog, Search, Network, AlertTriangle, MessageSquare, RotateCcw, Download, Cpu } from 'lucide-react'
 import { ExportDialog } from '@/components/campaigns/export-dialog'
-import { getCampaignSettings, DEFAULT_SETTINGS, AGGRESSIVENESS_OPTIONS, CHUNK_SIZE_OPTIONS, LINK_LABEL_OPTIONS, DEFAULT_PROMPTS } from '@/lib/campaign-settings'
+import { getCampaignSettings, DEFAULT_SETTINGS, AGGRESSIVENESS_OPTIONS, CHUNK_SIZE_OPTIONS, LINK_LABEL_OPTIONS, DEFAULT_PROMPTS, CHAT_MODEL_OPTIONS, EXTRACTION_MODEL_OPTIONS } from '@/lib/campaign-settings'
 import type { CampaignSettings } from '@/lib/db/schema'
+import { getModelProvider } from '@/lib/db/schema'
 
 const LANGUAGES = [
   { value: 'en', label: 'English' },
@@ -137,6 +138,16 @@ export default function SettingsPage() {
     setSettings((prev) => ({
       ...prev,
       prompts: { ...prev.prompts, [key]: value },
+    }))
+  }
+
+  const updateModelSetting = <K extends keyof typeof settings.model>(
+    key: K,
+    value: typeof settings.model[K]
+  ) => {
+    setSettings((prev) => ({
+      ...prev,
+      model: { ...prev.model, [key]: value },
     }))
   }
 
@@ -249,8 +260,9 @@ export default function SettingsPage() {
         </div>
 
         <Tabs defaultValue="general" className="space-y-6">
-          <TabsList className="w-full overflow-x-auto flex sm:grid sm:grid-cols-6 scrollbar-hide">
+          <TabsList className="w-full overflow-x-auto flex sm:grid sm:grid-cols-7 scrollbar-hide">
             <TabsTrigger value="general">General</TabsTrigger>
+            <TabsTrigger value="models">Models</TabsTrigger>
             <TabsTrigger value="extraction">Extraction</TabsTrigger>
             <TabsTrigger value="search">Search</TabsTrigger>
             <TabsTrigger value="prompts">Prompts</TabsTrigger>
@@ -317,6 +329,119 @@ export default function SettingsPage() {
               </CardHeader>
               <CardContent>
                 <ExportDialog campaignId={campaignId} campaignName={name} />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* AI Models Tab */}
+          <TabsContent value="models">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Cpu className="h-5 w-5" />
+                  AI Model Selection
+                </CardTitle>
+                <CardDescription>
+                  Choose which AI models to use for different operations.
+                  Some models require specific API keys to be configured.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Chat Model Selection */}
+                <div className="space-y-3">
+                  <Label>Chat Model</Label>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Used for AI chat responses and campaign summaries.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {CHAT_MODEL_OPTIONS.map((option) => {
+                      const provider = getModelProvider(option.value)
+                      const isSelected = settings.model.chatModel === option.value
+                      return (
+                        <button
+                          key={option.value}
+                          onClick={() => updateModelSetting('chatModel', option.value)}
+                          className={`p-3 rounded-lg border text-left transition-colors ${
+                            isSelected
+                              ? 'border-primary bg-primary/10'
+                              : 'border-border hover:border-primary/50'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <p className="font-medium">{option.label}</p>
+                            <span className={`text-xs px-2 py-0.5 rounded ${
+                              provider === 'anthropic'
+                                ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                                : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                            }`}>
+                              {provider === 'anthropic' ? 'Anthropic' : 'Google'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {option.description}
+                          </p>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Extraction Model Selection */}
+                <div className="space-y-3 pt-4 border-t">
+                  <Label>Extraction Model</Label>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Used for entity extraction from documents and notes. Faster models are recommended for bulk extraction.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {EXTRACTION_MODEL_OPTIONS.map((option) => {
+                      const provider = getModelProvider(option.value)
+                      const isSelected = settings.model.extractionModel === option.value
+                      return (
+                        <button
+                          key={option.value}
+                          onClick={() => updateModelSetting('extractionModel', option.value)}
+                          className={`p-3 rounded-lg border text-left transition-colors ${
+                            isSelected
+                              ? 'border-primary bg-primary/10'
+                              : 'border-border hover:border-primary/50'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <p className="font-medium">{option.label}</p>
+                            <span className={`text-xs px-2 py-0.5 rounded ${
+                              provider === 'anthropic'
+                                ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                                : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                            }`}>
+                              {provider === 'anthropic' ? 'Anthropic' : 'Google'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {option.description}
+                          </p>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* API Key Status */}
+                <div className="space-y-3 pt-4 border-t">
+                  <Label>Provider Status</Label>
+                  <p className="text-sm text-muted-foreground">
+                    API keys are configured in environment variables on the server.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted text-sm">
+                      <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                      Anthropic (Claude)
+                    </div>
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted text-sm">
+                      <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                      Google (Gemini)
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

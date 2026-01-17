@@ -1,23 +1,10 @@
 import { NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
 import { getSession } from '@/lib/auth'
 import { db, campaigns, campaignMembers, entities } from '@/lib/db'
-import { eq, and, desc, or, inArray } from 'drizzle-orm'
-
-// Lazy-initialize Anthropic client
-let anthropicClient: Anthropic | null = null
-
-function getAnthropic(): Anthropic {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY is not configured')
-  }
-  if (!anthropicClient) {
-    anthropicClient = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    })
-  }
-  return anthropicClient
-}
+import { eq, and, desc } from 'drizzle-orm'
+import { generateResponse } from '@/lib/ai/client'
+import { getCampaignSettings } from '@/lib/campaign-settings'
+import type { AIModel } from '@/lib/db/schema'
 
 interface SpotlightCache {
   data: SpotlightData
@@ -81,8 +68,12 @@ export async function GET(
       return NextResponse.json(cached.data)
     }
 
+    // Get campaign settings for model selection
+    const settings = getCampaignSettings(campaign.settings)
+    const chatModel = settings.model.chatModel
+
     // Generate new spotlight
-    const spotlight = await generateSpotlight(campaignId, campaign.name, campaign.language)
+    const spotlight = await generateSpotlight(campaignId, campaign.name, campaign.language, chatModel)
 
     // Cache the result
     spotlightCache.set(campaignId, {
@@ -104,7 +95,8 @@ export async function GET(
 async function generateSpotlight(
   campaignId: string,
   campaignName: string,
-  language: string
+  language: string,
+  chatModel: AIModel = 'claude-sonnet-4-20250514'
 ): Promise<SpotlightData> {
   // Fetch recent completed sessions
   const recentSessions = await db.query.entities.findMany({
@@ -200,17 +192,12 @@ async function generateSpotlight(
     }
   }
 
-  // Generate AI summary
-  const anthropic = getAnthropic()
-
+  // Generate AI summary using unified client
   const languageInstruction = language === 'pt-BR'
     ? 'Respond in Brazilian Portuguese.'
     : 'Respond in English.'
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 500,
-    system: `You are a dramatic narrator for a tabletop RPG campaign. Your role is to summarize the current state of the campaign in an engaging, dramatic way that captures the essence of the story.
+  const systemPrompt = `You are a dramatic narrator for a tabletop RPG campaign. Your role is to summarize the current state of the campaign in an engaging, dramatic way that captures the essence of the story.
 
 ${languageInstruction}
 
@@ -226,18 +213,22 @@ Format your response as JSON:
   "atStake": "what could be lost"
 }
 
-Be vivid and evocative but stay true to the content provided. If information is limited, work with what's available.`,
+Be vivid and evocative but stay true to the content provided. If information is limited, work with what's available.`
+
+  const response = await generateResponse({
+    model: chatModel,
+    systemPrompt,
     messages: [
       {
         role: 'user',
         content: context,
       },
     ],
+    maxTokens: 500,
   })
 
   // Parse AI response
-  const textContent = response.content.find((block) => block.type === 'text')
-  const responseText = textContent?.type === 'text' ? textContent.text : '{}'
+  const responseText = response.content || '{}'
 
   let parsed: { summary?: string; keyTension?: string; atStake?: string }
   try {
@@ -318,7 +309,11 @@ export async function POST(
       return NextResponse.json({ error: 'Campaign not found' }, { status: 404 })
     }
 
-    const spotlight = await generateSpotlight(campaignId, campaign.name, campaign.language)
+    // Get campaign settings for model selection
+    const settings = getCampaignSettings(campaign.settings)
+    const chatModel = settings.model.chatModel
+
+    const spotlight = await generateSpotlight(campaignId, campaign.name, campaign.language, chatModel)
 
     // Cache the result
     const sessionEntities = await db.query.entities.findMany({

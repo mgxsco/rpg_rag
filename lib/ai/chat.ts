@@ -1,23 +1,8 @@
-import Anthropic from '@anthropic-ai/sdk'
 import { searchSimilarChunks, buildContext } from './rag'
 import { ChatMessage, SearchResult } from '@/lib/types'
-import { getCampaignSettings, DEFAULT_SETTINGS, DEFAULT_PROMPTS } from '@/lib/campaign-settings'
+import { getCampaignSettings, DEFAULT_PROMPTS } from '@/lib/campaign-settings'
 import type { CampaignSettings } from '@/lib/db/schema'
-
-// Lazy-initialize Anthropic client to avoid build errors
-let anthropicClient: Anthropic | null = null
-
-function getAnthropic(): Anthropic {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY is not configured')
-  }
-  if (!anthropicClient) {
-    anthropicClient = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    })
-  }
-  return anthropicClient
-}
+import { generateResponse } from './client'
 
 export interface ChatOptions {
   isDM: boolean
@@ -31,7 +16,7 @@ export interface ChatResponse {
 }
 
 /**
- * Generate a chat response using RAG with Claude
+ * Generate a chat response using RAG with the configured AI model
  */
 export async function generateChatResponse(
   campaignId: string,
@@ -39,14 +24,6 @@ export async function generateChatResponse(
   history: ChatMessage[],
   options: ChatOptions
 ): Promise<ChatResponse> {
-  // Check if API key is configured
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return {
-      content: 'Chat is not configured. Please add ANTHROPIC_API_KEY to your environment variables.',
-      sources: [],
-    }
-  }
-
   // Get campaign settings with defaults
   const settings = getCampaignSettings(options.settings)
 
@@ -71,36 +48,30 @@ Campaign: ${options.campaignName || 'Unknown Campaign'}
 Context from campaign knowledge base:
 ${context}`
 
-  // Prepare messages for Claude
-  const messages: Anthropic.MessageParam[] = [
+  // Prepare messages
+  const messages = [
     // Include recent history
     ...history.slice(-10).map((msg) => ({
       role: msg.role as 'user' | 'assistant',
       content: msg.content,
     })),
     {
-      role: 'user',
+      role: 'user' as const,
       content: userMessage,
     },
   ]
 
-  // Generate response with Claude
-  const anthropic = getAnthropic()
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 1024,
-    system: systemPrompt,
+  // Generate response using the unified client
+  const response = await generateResponse({
+    model: settings.model.chatModel,
+    systemPrompt,
     messages,
+    maxTokens: settings.model.maxTokens,
+    temperature: settings.model.temperature,
   })
 
-  // Extract text from response
-  const textContent = response.content.find((block) => block.type === 'text')
-  const responseText = textContent?.type === 'text'
-    ? textContent.text
-    : 'I apologize, but I was unable to generate a response.'
-
   return {
-    content: responseText,
+    content: response.content || 'I apologize, but I was unable to generate a response.',
     sources: chunks,
   }
 }

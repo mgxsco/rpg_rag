@@ -89,8 +89,30 @@ export const languageEnum = [
   'en', 'pt-BR', 'pt', 'es', 'fr', 'de', 'it', 'nl', 'pl', 'ru', 'ja', 'ko', 'zh'
 ] as const
 
+// Available AI models (Claude + Gemini)
+export const aiModels = [
+  'claude-sonnet-4-20250514',
+  'claude-3-5-haiku-20241022',
+  'claude-opus-4-20250514',
+  'gemini-2.5-flash',
+  'gemini-3-flash-preview',
+] as const
+
+export type AIModel = (typeof aiModels)[number]
+
+// Helper to check model provider
+export function getModelProvider(model: AIModel): 'anthropic' | 'google' {
+  return model.startsWith('gemini') ? 'google' : 'anthropic'
+}
+
 // Campaign settings type
 export interface CampaignSettings {
+  model?: {
+    chatModel?: AIModel
+    extractionModel?: AIModel
+    temperature?: number      // 0.0 - 1.0
+    maxTokens?: number        // 256 - 4096
+  }
   extraction?: {
     aggressiveness?: 'conservative' | 'balanced' | 'obsessive'
     chunkSize?: number

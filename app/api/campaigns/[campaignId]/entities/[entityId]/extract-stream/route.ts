@@ -121,6 +121,7 @@ export async function POST(
           aggressiveness: campaignSettings.extraction.aggressiveness,
           confidenceThreshold: campaignSettings.extraction.confidenceThreshold,
           enableRelationships: campaignSettings.extraction.enableRelationships,
+          extractionModel: campaignSettings.model.extractionModel,
           customPrompts: {
             extractionConservativePrompt: campaignSettings.prompts.extractionConservativePrompt,
             extractionBalancedPrompt: campaignSettings.prompts.extractionBalancedPrompt,
@@ -134,8 +135,10 @@ export async function POST(
           mode: extractionSettings.aggressiveness,
         })
 
-        // Run extraction pipeline with progress callback and timeout
-        const extractionPromise = runExtractionPipeline(
+        // Run extraction pipeline with progress callback
+        // No overall timeout - each chunk has its own timeout
+        // This allows processing large content by streaming results
+        const extraction = await runExtractionPipeline(
           content,
           entity.name,
           existingNames,
@@ -150,17 +153,10 @@ export async function POST(
           },
           {
             ...extractionSettings,
-            maxChunks: 6, // Reduced for Vercel timeout
-            parallelBatchSize: 1, // Sequential for stability
+            maxChunks: 20, // Allow more chunks since we stream
+            parallelBatchSize: 1, // Sequential - one chunk at a time
           }
         )
-
-        // Timeout after 45 seconds (Vercel Pro has 60s limit, leave margin)
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Extraction timed out - content may be too large')), 45000)
-        )
-
-        const extraction = await Promise.race([extractionPromise, timeoutPromise])
 
         sendEvent('progress', {
           stage: 'processing',

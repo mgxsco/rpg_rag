@@ -4,7 +4,9 @@ import { db, campaigns, campaignMembers, notes } from '@/lib/db'
 import { eq, and } from 'drizzle-orm'
 import { syncNoteEmbeddings } from '@/lib/ai/embeddings'
 import { syncNoteLinks } from '@/lib/wikilinks/sync'
-import Anthropic from '@anthropic-ai/sdk'
+import { generateSimple } from '@/lib/ai/client'
+import { getCampaignSettings } from '@/lib/campaign-settings'
+import type { AIModel } from '@/lib/db/schema'
 
 // Dynamic import for pdf-parse to avoid build issues
 async function parsePDF(buffer: Buffer): Promise<string> {
@@ -27,24 +29,14 @@ interface ExtractedNote {
   tags: string[]
 }
 
-async function analyzeAndExtractNotes(content: string, fileName: string): Promise<ExtractedNote[]> {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.log('[Upload] No ANTHROPIC_API_KEY, skipping AI analysis')
-    return [{
-      title: fileName.replace(/\.[^/.]+$/, ''),
-      content,
-      noteType: 'lore',
-      tags: ['imported'],
-    }]
-  }
+async function analyzeAndExtractNotes(
+  content: string,
+  fileName: string,
+  model: AIModel = 'claude-sonnet-4-20250514'
+): Promise<ExtractedNote[]> {
+  console.log(`[Upload] Analyzing content with ${model}...`)
 
-  console.log('[Upload] Analyzing content with Claude...')
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 4096,
-    system: `You are a D&D campaign content analyzer. Extract structured notes from uploaded content.
+  const systemPrompt = `You are a D&D campaign content analyzer. Extract structured notes from uploaded content.
 
 Analyze the content and extract ALL relevant entities into separate notes. Each note should be self-contained.
 
@@ -65,16 +57,14 @@ Return ONLY a valid JSON array. Each object must have:
 - tags: Relevant tags as string array
 
 Extract EVERY entity mentioned. Create separate notes for each NPC, location, item, etc.
-Use [[Note Title]] wikilink syntax to reference other notes you're creating.`,
-    messages: [{
-      role: 'user',
-      content: `Analyze this D&D content and extract all notes:\n\n---\nFile: ${fileName}\n---\n\n${content.slice(0, 50000)}`,
-    }],
-  })
+Use [[Note Title]] wikilink syntax to reference other notes you're creating.`
 
-  const textContent = response.content.find((block) => block.type === 'text')
-  if (!textContent || textContent.type !== 'text') {
-    console.log('[Upload] No text response from Claude')
+  const userMessage = `Analyze this D&D content and extract all notes:\n\n---\nFile: ${fileName}\n---\n\n${content.slice(0, 50000)}`
+
+  const responseText = await generateSimple(model, systemPrompt, userMessage, 4096)
+
+  if (!responseText) {
+    console.log('[Upload] No text response from AI')
     return [{
       title: fileName.replace(/\.[^/.]+$/, ''),
       content,
@@ -84,7 +74,7 @@ Use [[Note Title]] wikilink syntax to reference other notes you're creating.`,
   }
 
   try {
-    let jsonStr = textContent.text.trim()
+    let jsonStr = responseText.trim()
 
     // Try to extract JSON from code blocks
     const codeBlockMatch = jsonStr.match(/```(?:json)?[\s\n]*([\s\S]*?)```/)
@@ -219,9 +209,13 @@ export async function POST(
         continue
       }
 
+      // Get campaign settings for model selection
+      const settings = getCampaignSettings(campaign.settings)
+      const chatModel = settings.model.chatModel
+
       // Analyze content and extract notes using AI
       console.log(`[Upload] Processing file: ${fileName}`)
-      const extractedNotes = await analyzeAndExtractNotes(content, fileName)
+      const extractedNotes = await analyzeAndExtractNotes(content, fileName, chatModel)
       console.log(`[Upload] Creating ${extractedNotes.length} notes from ${fileName}`)
 
       const createdNotes = []
