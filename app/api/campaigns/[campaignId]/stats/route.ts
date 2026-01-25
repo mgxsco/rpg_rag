@@ -6,8 +6,9 @@ import { ensureKnowledgeGraphTables } from '@/lib/db/migrations'
 
 export async function GET(
   request: Request,
-  { params }: { params: { campaignId: string } }
+  { params }: { params: Promise<{ campaignId: string }> }
 ) {
+  const { campaignId } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
@@ -15,7 +16,7 @@ export async function GET(
   }
 
   const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, params.campaignId),
+    where: eq(campaigns.id, campaignId),
     with: {
       members: true,
     },
@@ -49,19 +50,19 @@ export async function GET(
     db
       .select({ count: sql<number>`count(*)::int` })
       .from(entities)
-      .where(eq(entities.campaignId, params.campaignId)),
+      .where(eq(entities.campaignId, campaignId)),
 
     // Total relationship count
     db
       .select({ count: sql<number>`count(*)::int` })
       .from(relationships)
-      .where(eq(relationships.campaignId, params.campaignId)),
+      .where(eq(relationships.campaignId, campaignId)),
 
     // Total document count
     db
       .select({ count: sql<number>`count(*)::int` })
       .from(documents)
-      .where(eq(documents.campaignId, params.campaignId)),
+      .where(eq(documents.campaignId, campaignId)),
 
     // Entity counts by type
     db
@@ -70,7 +71,7 @@ export async function GET(
         count: sql<number>`count(*)::int`,
       })
       .from(entities)
-      .where(eq(entities.campaignId, params.campaignId))
+      .where(eq(entities.campaignId, campaignId))
       .groupBy(entities.entityType)
       .orderBy(desc(sql`count(*)`)),
 
@@ -83,13 +84,13 @@ export async function GET(
         updatedAt: entities.updatedAt,
       })
       .from(entities)
-      .where(eq(entities.campaignId, params.campaignId))
+      .where(eq(entities.campaignId, campaignId))
       .orderBy(desc(entities.updatedAt))
       .limit(5),
 
     // Recent documents
     db.query.documents.findMany({
-      where: eq(documents.campaignId, params.campaignId),
+      where: eq(documents.campaignId, campaignId),
       orderBy: desc(documents.createdAt),
       limit: 5,
       with: {

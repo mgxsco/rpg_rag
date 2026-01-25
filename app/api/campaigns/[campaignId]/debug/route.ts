@@ -6,8 +6,9 @@ import { eq, and } from 'drizzle-orm'
 
 export async function GET(
   request: Request,
-  { params }: { params: { campaignId: string } }
+  { params }: { params: Promise<{ campaignId: string }> }
 ) {
+  const { campaignId } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
@@ -15,7 +16,7 @@ export async function GET(
   }
 
   const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, params.campaignId),
+    where: eq(campaigns.id, campaignId),
   })
 
   if (!campaign) {
@@ -33,11 +34,11 @@ export async function GET(
   const allNotes = await db
     .select()
     .from(notes)
-    .where(eq(notes.campaignId, params.campaignId))
+    .where(eq(notes.campaignId, campaignId))
 
   // Count embeddings
   const embeddingsResult = await sql`
-    SELECT COUNT(*) as count FROM note_embeddings WHERE campaign_id = ${params.campaignId}
+    SELECT COUNT(*) as count FROM note_embeddings WHERE campaign_id = ${campaignId}
   `
   const embeddingsCount = embeddingsResult.rows[0]?.count || 0
 
@@ -52,7 +53,7 @@ export async function GET(
       CASE WHEN e.embedding IS NULL THEN false ELSE true END as has_embedding
     FROM note_embeddings e
     JOIN notes n ON n.id = e.note_id
-    WHERE e.campaign_id = ${params.campaignId}
+    WHERE e.campaign_id = ${campaignId}
     LIMIT 5
   `
 

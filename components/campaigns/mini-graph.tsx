@@ -86,19 +86,31 @@ export function MiniGraph({ campaignId }: MiniGraphProps) {
     try {
       const res = await fetch(`/api/campaigns/${campaignId}/graph`)
       if (res.ok) {
-        const data = await res.json()
+        const response = await res.json()
+
+        // Handle both old format (data.nodes/links) and new format (data.graphData.nodes/links)
+        const data = response.graphData || response
+        const nodes = data.nodes || []
+        const links = data.links || []
+
+        if (nodes.length === 0) {
+          setGraphData(null)
+          return
+        }
 
         // Limit to top 30 most connected nodes
         const nodeConnections = new Map<string, number>()
 
         // Count connections per node
-        for (const link of data.links) {
-          nodeConnections.set(link.source, (nodeConnections.get(link.source) || 0) + 1)
-          nodeConnections.set(link.target, (nodeConnections.get(link.target) || 0) + 1)
+        for (const link of links) {
+          const sourceId = typeof link.source === 'string' ? link.source : link.source?.id
+          const targetId = typeof link.target === 'string' ? link.target : link.target?.id
+          if (sourceId) nodeConnections.set(sourceId, (nodeConnections.get(sourceId) || 0) + 1)
+          if (targetId) nodeConnections.set(targetId, (nodeConnections.get(targetId) || 0) + 1)
         }
 
         // Get top connected nodes
-        const sortedNodes = [...data.nodes].sort((a, b) =>
+        const sortedNodes = [...nodes].sort((a, b) =>
           (nodeConnections.get(b.id) || 0) - (nodeConnections.get(a.id) || 0)
         )
 
@@ -106,17 +118,22 @@ export function MiniGraph({ campaignId }: MiniGraphProps) {
         const topNodeIds = new Set(topNodes.map((n) => n.id))
 
         // Filter links to only include those between top nodes
-        const filteredLinks = data.links.filter(
-          (link: GraphLink) => topNodeIds.has(link.source) && topNodeIds.has(link.target)
-        )
+        const filteredLinks = links.filter((link: any) => {
+          const sourceId = typeof link.source === 'string' ? link.source : link.source?.id
+          const targetId = typeof link.target === 'string' ? link.target : link.target?.id
+          return topNodeIds.has(sourceId) && topNodeIds.has(targetId)
+        })
 
         setGraphData({
           nodes: topNodes.map((node) => ({
             id: node.id,
-            title: node.title,
-            note_type: node.note_type,
+            title: node.title || node.name,
+            note_type: node.note_type || node.type,
           })),
-          links: filteredLinks,
+          links: filteredLinks.map((link: any) => ({
+            source: typeof link.source === 'string' ? link.source : link.source?.id,
+            target: typeof link.target === 'string' ? link.target : link.target?.id,
+          })),
         })
       }
     } catch (err) {

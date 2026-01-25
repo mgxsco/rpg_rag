@@ -9,23 +9,24 @@ import { checkCampaignAccess, isAccessError } from '@/lib/api/access'
 
 export async function GET(
   request: Request,
-  { params }: { params: { campaignId: string; slug: string } }
+  { params }: { params: Promise<{ campaignId: string; slug: string }> }
 ) {
+  const { campaignId, slug } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const access = await checkCampaignAccess(params.campaignId, session.user.id)
+  const access = await checkCampaignAccess(campaignId, session.user.id)
   if (isAccessError(access)) {
     return NextResponse.json({ error: access.error }, { status: access.status })
   }
 
   const note = await db.query.notes.findFirst({
     where: and(
-      eq(notes.campaignId, params.campaignId),
-      eq(notes.slug, params.slug)
+      eq(notes.campaignId, campaignId),
+      eq(notes.slug, slug)
     ),
     with: {
       author: true,
@@ -46,23 +47,24 @@ export async function GET(
 
 export async function PUT(
   request: Request,
-  { params }: { params: { campaignId: string; slug: string } }
+  { params }: { params: Promise<{ campaignId: string; slug: string }> }
 ) {
+  const { campaignId, slug } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const access = await checkCampaignAccess(params.campaignId, session.user.id)
+  const access = await checkCampaignAccess(campaignId, session.user.id)
   if (isAccessError(access)) {
     return NextResponse.json({ error: access.error }, { status: access.status })
   }
 
   const note = await db.query.notes.findFirst({
     where: and(
-      eq(notes.campaignId, params.campaignId),
-      eq(notes.slug, params.slug)
+      eq(notes.campaignId, campaignId),
+      eq(notes.slug, slug)
     ),
   })
 
@@ -87,7 +89,7 @@ export async function PUT(
   if (newSlug !== note.slug) {
     const existing = await db.query.notes.findFirst({
       where: and(
-        eq(notes.campaignId, params.campaignId),
+        eq(notes.campaignId, campaignId),
         eq(notes.slug, newSlug)
       ),
     })
@@ -116,8 +118,8 @@ export async function PUT(
 
   // Sync wikilinks and embeddings in background
   try {
-    await syncNoteLinks(updated.id, params.campaignId, updated.content || '')
-    await syncNoteEmbeddings(updated.id, params.campaignId, updated.title, updated.content || '')
+    await syncNoteLinks(updated.id, campaignId, updated.content || '')
+    await syncNoteEmbeddings(updated.id, campaignId, updated.title, updated.content || '')
   } catch (error) {
     console.error('Error syncing note:', error)
   }
@@ -127,23 +129,24 @@ export async function PUT(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { campaignId: string; slug: string } }
+  { params }: { params: Promise<{ campaignId: string; slug: string }> }
 ) {
+  const { campaignId, slug } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const access = await checkCampaignAccess(params.campaignId, session.user.id)
+  const access = await checkCampaignAccess(campaignId, session.user.id)
   if (isAccessError(access)) {
     return NextResponse.json({ error: access.error }, { status: access.status })
   }
 
   const note = await db.query.notes.findFirst({
     where: and(
-      eq(notes.campaignId, params.campaignId),
-      eq(notes.slug, params.slug)
+      eq(notes.campaignId, campaignId),
+      eq(notes.slug, slug)
     ),
   })
 

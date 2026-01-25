@@ -18,15 +18,16 @@ import { checkCampaignAccess, isAccessError } from '@/lib/api/access'
  */
 export async function POST(
   request: Request,
-  { params }: { params: { campaignId: string } }
+  { params }: { params: Promise<{ campaignId: string }> }
 ) {
+  const { campaignId } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const access = await checkCampaignAccess(params.campaignId, session.user.id)
+  const access = await checkCampaignAccess(campaignId, session.user.id)
   if (isAccessError(access)) {
     return NextResponse.json({ error: access.error }, { status: access.status })
   }
@@ -57,14 +58,14 @@ export async function POST(
   const primaryEntity = await db.query.entities.findFirst({
     where: and(
       eq(entities.id, primaryEntityId),
-      eq(entities.campaignId, params.campaignId)
+      eq(entities.campaignId, campaignId)
     ),
   })
 
   const secondaryEntity = await db.query.entities.findFirst({
     where: and(
       eq(entities.id, secondaryEntityId),
-      eq(entities.campaignId, params.campaignId)
+      eq(entities.campaignId, campaignId)
     ),
   })
 
@@ -123,7 +124,7 @@ export async function POST(
     ].filter(Boolean)
 
     const allCampaignEntities = await db.query.entities.findMany({
-      where: eq(entities.campaignId, params.campaignId),
+      where: eq(entities.campaignId, campaignId),
     })
 
     // Update each entity's content to replace [[SecondaryName]] with [[PrimaryName]]
@@ -173,7 +174,7 @@ export async function POST(
     try {
       await syncEntityEmbeddings(
         updatedPrimary.id,
-        params.campaignId,
+        campaignId,
         updatedPrimary.name,
         updatedPrimary.content || ''
       )

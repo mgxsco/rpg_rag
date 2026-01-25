@@ -20,8 +20,9 @@ async function parsePDF(buffer: Buffer): Promise<string> {
  */
 export async function POST(
   request: Request,
-  { params }: { params: { campaignId: string } }
+  { params }: { params: Promise<{ campaignId: string }> }
 ) {
+  const { campaignId } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
@@ -31,13 +32,13 @@ export async function POST(
   // Check membership
   const membership = await db.query.campaignMembers.findFirst({
     where: and(
-      eq(campaignMembers.campaignId, params.campaignId),
+      eq(campaignMembers.campaignId, campaignId),
       eq(campaignMembers.userId, session.user.id)
     ),
   })
 
   const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, params.campaignId),
+    where: eq(campaigns.id, campaignId),
   })
 
   if (!campaign) {
@@ -128,7 +129,7 @@ export async function POST(
       const [doc] = await db
         .insert(documents)
         .values({
-          campaignId: params.campaignId,
+          campaignId: campaignId,
           name: fileName,
           content,
           fileType: fileType || 'text/plain',
@@ -137,7 +138,7 @@ export async function POST(
         .returning()
 
       // 2. Get existing entity names for deduplication
-      const existingNames = await getExistingEntityNames(params.campaignId)
+      const existingNames = await getExistingEntityNames(campaignId)
 
       // 3. Get campaign settings for extraction
       const campaignSettings = getCampaignSettings((campaign as any).settings)
@@ -170,7 +171,7 @@ export async function POST(
         try {
           // Check for existing entity
           const existing = await findExistingEntity(
-            params.campaignId,
+            campaignId,
             extracted.name,
             extracted.aliases
           )
@@ -200,7 +201,7 @@ export async function POST(
           const [newEntity] = await db
             .insert(entities)
             .values({
-              campaignId: params.campaignId,
+              campaignId: campaignId,
               name: extracted.name,
               canonicalName: extracted.canonicalName,
               entityType: extracted.type,
@@ -248,11 +249,11 @@ export async function POST(
 
           // Try to find in database if not in map
           if (!sourceId) {
-            const sourceEntity = await findExistingEntity(params.campaignId, rel.sourceEntity, [])
+            const sourceEntity = await findExistingEntity(campaignId, rel.sourceEntity, [])
             if (sourceEntity) sourceId = sourceEntity.id
           }
           if (!targetId) {
-            const targetEntity = await findExistingEntity(params.campaignId, rel.targetEntity, [])
+            const targetEntity = await findExistingEntity(campaignId, rel.targetEntity, [])
             if (targetEntity) targetId = targetEntity.id
           }
 
@@ -265,7 +266,7 @@ export async function POST(
           await db
             .insert(relationships)
             .values({
-              campaignId: params.campaignId,
+              campaignId: campaignId,
               sourceEntityId: sourceId,
               targetEntityId: targetId,
               relationshipType: rel.relationshipType,
@@ -321,8 +322,9 @@ export async function POST(
  */
 export async function GET(
   request: Request,
-  { params }: { params: { campaignId: string } }
+  { params }: { params: Promise<{ campaignId: string }> }
 ) {
+  const { campaignId } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
@@ -332,13 +334,13 @@ export async function GET(
   // Check membership
   const membership = await db.query.campaignMembers.findFirst({
     where: and(
-      eq(campaignMembers.campaignId, params.campaignId),
+      eq(campaignMembers.campaignId, campaignId),
       eq(campaignMembers.userId, session.user.id)
     ),
   })
 
   const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, params.campaignId),
+    where: eq(campaigns.id, campaignId),
   })
 
   if (!campaign) {
@@ -357,7 +359,7 @@ export async function GET(
       createdAt: documents.createdAt,
     })
     .from(documents)
-    .where(eq(documents.campaignId, params.campaignId))
+    .where(eq(documents.campaignId, campaignId))
     .orderBy(documents.createdAt)
 
   return NextResponse.json({ documents: docs })

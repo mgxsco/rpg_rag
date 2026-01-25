@@ -13,10 +13,14 @@ import type { StagedEntity, StagedRelationship, EntityMatch, ExtractPreviewRespo
  *
  * Returns Server-Sent Events stream with progress, then final staged results for review
  */
+// Allow longer execution for extraction
+export const maxDuration = 60
+
 export async function POST(
   request: Request,
-  { params }: { params: { campaignId: string; entityId: string } }
+  { params }: { params: Promise<{ campaignId: string; entityId: string }> }
 ) {
+  const { campaignId, entityId } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
@@ -29,13 +33,13 @@ export async function POST(
   // Check membership
   const membership = await db.query.campaignMembers.findFirst({
     where: and(
-      eq(campaignMembers.campaignId, params.campaignId),
+      eq(campaignMembers.campaignId, campaignId),
       eq(campaignMembers.userId, session.user.id)
     ),
   })
 
   const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, params.campaignId),
+    where: eq(campaigns.id, campaignId),
   })
 
   if (!campaign) {
@@ -55,8 +59,8 @@ export async function POST(
   // Get the entity
   const entity = await db.query.entities.findFirst({
     where: and(
-      eq(entities.campaignId, params.campaignId),
-      eq(entities.id, params.entityId)
+      eq(entities.campaignId, campaignId),
+      eq(entities.id, entityId)
     ),
   })
 
@@ -101,7 +105,7 @@ export async function POST(
 
         // Get existing entity names for deduplication (exclude the source entity)
         sendEvent('progress', { stage: 'loading', message: 'Loading existing entities...' })
-        const existingNames = await getExistingEntityNames(params.campaignId)
+        const existingNames = await getExistingEntityNames(campaignId)
         // Add the source entity name to avoid extracting it
         existingNames.push(entity.name)
         if (entity.aliases) {
@@ -227,7 +231,7 @@ export async function POST(
 
         // Get all existing entities in one query
         const existingEntities = await db.query.entities.findMany({
-          where: eq(entities.campaignId, params.campaignId),
+          where: eq(entities.campaignId, campaignId),
           columns: {
             id: true,
             name: true,

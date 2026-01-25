@@ -13,8 +13,9 @@ import { getCampaignSettings } from '@/lib/campaign-settings'
  */
 export async function POST(
   request: Request,
-  { params }: { params: { campaignId: string } }
+  { params }: { params: Promise<{ campaignId: string }> }
 ) {
+  const { campaignId } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
@@ -27,13 +28,13 @@ export async function POST(
   // Check membership
   const membership = await db.query.campaignMembers.findFirst({
     where: and(
-      eq(campaignMembers.campaignId, params.campaignId),
+      eq(campaignMembers.campaignId, campaignId),
       eq(campaignMembers.userId, session.user.id)
     ),
   })
 
   const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, params.campaignId),
+    where: eq(campaigns.id, campaignId),
   })
 
   if (!campaign) {
@@ -78,7 +79,7 @@ export async function POST(
     const chunks = chunkContent(trimmedContent, chunkSize)
 
     // Get existing entity names for deduplication
-    const existingEntityNames = await getExistingEntityNames(params.campaignId)
+    const existingEntityNames = await getExistingEntityNames(campaignId)
 
     // If extracting from an entity, exclude its own name
     if (sourceType === 'entity' && sourceId) {

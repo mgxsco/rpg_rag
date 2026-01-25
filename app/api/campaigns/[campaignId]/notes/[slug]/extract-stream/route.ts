@@ -13,10 +13,14 @@ import type { StagedEntity, StagedRelationship, EntityMatch, ExtractPreviewRespo
  *
  * Returns Server-Sent Events stream with progress, then final staged results for review
  */
+// Allow longer execution for extraction
+export const maxDuration = 60
+
 export async function POST(
   request: Request,
-  { params }: { params: { campaignId: string; slug: string } }
+  { params }: { params: Promise<{ campaignId: string; slug: string }> }
 ) {
+  const { campaignId, slug } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
@@ -29,13 +33,13 @@ export async function POST(
   // Check membership
   const membership = await db.query.campaignMembers.findFirst({
     where: and(
-      eq(campaignMembers.campaignId, params.campaignId),
+      eq(campaignMembers.campaignId, campaignId),
       eq(campaignMembers.userId, session.user.id)
     ),
   })
 
   const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, params.campaignId),
+    where: eq(campaigns.id, campaignId),
   })
 
   if (!campaign) {
@@ -55,8 +59,8 @@ export async function POST(
   // Get the note
   const note = await db.query.notes.findFirst({
     where: and(
-      eq(notes.campaignId, params.campaignId),
-      eq(notes.slug, params.slug)
+      eq(notes.campaignId, campaignId),
+      eq(notes.slug, slug)
     ),
   })
 
@@ -101,7 +105,7 @@ export async function POST(
 
         // Get existing entity names for deduplication
         sendEvent('progress', { stage: 'loading', message: 'Loading existing entities...' })
-        const existingNames = await getExistingEntityNames(params.campaignId)
+        const existingNames = await getExistingEntityNames(campaignId)
         sendEvent('progress', {
           stage: 'loaded',
           message: `Found ${existingNames.length} existing entities`,
@@ -220,7 +224,7 @@ export async function POST(
 
         // Get all existing entities in one query
         const existingEntities = await db.query.entities.findMany({
-          where: eq(entities.campaignId, params.campaignId),
+          where: eq(entities.campaignId, campaignId),
           columns: {
             id: true,
             name: true,

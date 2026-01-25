@@ -6,6 +6,7 @@ import { getExistingEntityNames } from '@/lib/ai/extraction/dedup'
 import { getCampaignSettings } from '@/lib/campaign-settings'
 import { v4 as uuidv4 } from 'uuid'
 import type { StagedEntity, StagedRelationship, EntityMatch, ExtractPreviewResponse } from '@/lib/types'
+import { withRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
 
 // Dynamic import for pdf-parse
 async function parsePDF(buffer: Buffer): Promise<string> {
@@ -20,10 +21,14 @@ async function parsePDF(buffer: Buffer): Promise<string> {
  *
  * Returns Server-Sent Events stream with progress, then final results
  */
+// Increase max duration for Vercel Pro (streaming extraction can take time)
+export const maxDuration = 60
+
 export async function POST(
   request: Request,
-  { params }: { params: { campaignId: string } }
+  { params }: { params: Promise<{ campaignId: string }> }
 ) {
+  const { campaignId } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
@@ -33,16 +38,20 @@ export async function POST(
     })
   }
 
+  // Rate limit check
+  const rateLimitResponse = withRateLimit(session.user.id, 'extraction', RATE_LIMITS.extraction)
+  if (rateLimitResponse) return rateLimitResponse
+
   // Check membership
   const membership = await db.query.campaignMembers.findFirst({
     where: and(
-      eq(campaignMembers.campaignId, params.campaignId),
+      eq(campaignMembers.campaignId, campaignId),
       eq(campaignMembers.userId, session.user.id)
     ),
   })
 
   const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, params.campaignId),
+    where: eq(campaigns.id, campaignId),
   })
 
   if (!campaign) {
@@ -126,7 +135,7 @@ export async function POST(
 
           // Get existing entity names for deduplication
           sendEvent('progress', { stage: 'loading', message: 'Loading existing entities...' })
-          const existingNames = await getExistingEntityNames(params.campaignId)
+          const existingNames = await getExistingEntityNames(campaignId)
           sendEvent('progress', {
             stage: 'loaded',
             message: `Found ${existingNames.length} existing entities`,
@@ -245,7 +254,7 @@ export async function POST(
 
           // Get all existing entities in one query
           const existingEntities = await db.query.entities.findMany({
-            where: eq(entities.campaignId, params.campaignId),
+            where: eq(entities.campaignId, campaignId),
             columns: {
               id: true,
               name: true,

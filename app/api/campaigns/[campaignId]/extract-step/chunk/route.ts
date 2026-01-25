@@ -6,6 +6,10 @@ import { getCampaignSettings, DEFAULT_PROMPTS } from '@/lib/campaign-settings'
 import { AIModel } from '@/lib/db/schema'
 import { v4 as uuidv4 } from 'uuid'
 import type { StagedEntity } from '@/lib/types'
+import { withRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
+
+// Allow longer execution time for AI extraction
+export const maxDuration = 60
 
 /**
  * Extract entities from a single chunk
@@ -24,8 +28,9 @@ import type { StagedEntity } from '@/lib/types'
  */
 export async function POST(
   request: Request,
-  { params }: { params: { campaignId: string } }
+  { params }: { params: Promise<{ campaignId: string }> }
 ) {
+  const { campaignId } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
@@ -35,16 +40,20 @@ export async function POST(
     })
   }
 
+  // Rate limit check
+  const rateLimitResponse = withRateLimit(session.user.id, 'extraction', RATE_LIMITS.extraction)
+  if (rateLimitResponse) return rateLimitResponse
+
   // Check membership
   const membership = await db.query.campaignMembers.findFirst({
     where: and(
-      eq(campaignMembers.campaignId, params.campaignId),
+      eq(campaignMembers.campaignId, campaignId),
       eq(campaignMembers.userId, session.user.id)
     ),
   })
 
   const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, params.campaignId),
+    where: eq(campaigns.id, campaignId),
   })
 
   if (!campaign) {
@@ -94,7 +103,7 @@ export async function POST(
     const systemPrompt = `${basePrompt}\n${languageInstruction}\n\n${ENTITY_TYPES_DESCRIPTION}`
 
     // Call AI to extract entities
-    const responseText = await generateSimple(extractionModel, systemPrompt, chunkContent, 8192)
+    const responseText = await generateSimple(extractionModel, systemPrompt, chunkContent, 2048)
 
     if (!responseText) {
       return new Response(

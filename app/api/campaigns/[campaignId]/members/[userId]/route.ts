@@ -6,8 +6,9 @@ import { eq, and } from 'drizzle-orm'
 // PUT /api/campaigns/[campaignId]/members/[userId] - Update member role (DM only)
 export async function PUT(
   request: Request,
-  { params }: { params: { campaignId: string; userId: string } }
+  { params }: { params: Promise<{ campaignId: string; userId: string }> }
 ) {
+  const { campaignId, userId } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
@@ -15,7 +16,7 @@ export async function PUT(
   }
 
   const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, params.campaignId),
+    where: eq(campaigns.id, campaignId),
     with: {
       members: true,
     },
@@ -36,7 +37,7 @@ export async function PUT(
   }
 
   // Cannot modify the owner
-  if (params.userId === campaign.ownerId) {
+  if (userId === campaign.ownerId) {
     return NextResponse.json({ error: 'Cannot modify the campaign owner' }, { status: 400 })
   }
 
@@ -49,7 +50,7 @@ export async function PUT(
   }
 
   // Find the member
-  const member = campaign.members.find((m) => m.userId === params.userId)
+  const member = campaign.members.find((m) => m.userId === userId)
   if (!member) {
     return NextResponse.json({ error: 'Member not found' }, { status: 404 })
   }
@@ -60,8 +61,8 @@ export async function PUT(
     .set({ role })
     .where(
       and(
-        eq(campaignMembers.campaignId, params.campaignId),
-        eq(campaignMembers.userId, params.userId)
+        eq(campaignMembers.campaignId, campaignId),
+        eq(campaignMembers.userId, userId)
       )
     )
     .returning()
@@ -78,8 +79,9 @@ export async function PUT(
 // DELETE /api/campaigns/[campaignId]/members/[userId] - Remove member (DM only)
 export async function DELETE(
   request: Request,
-  { params }: { params: { campaignId: string; userId: string } }
+  { params }: { params: Promise<{ campaignId: string; userId: string }> }
 ) {
+  const { campaignId, userId } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
@@ -87,7 +89,7 @@ export async function DELETE(
   }
 
   const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, params.campaignId),
+    where: eq(campaigns.id, campaignId),
     with: {
       members: true,
     },
@@ -108,7 +110,7 @@ export async function DELETE(
   }
 
   // Cannot remove the owner
-  if (params.userId === campaign.ownerId) {
+  if (userId === campaign.ownerId) {
     return NextResponse.json({ error: 'Cannot remove the campaign owner' }, { status: 400 })
   }
 
@@ -117,8 +119,8 @@ export async function DELETE(
     .delete(campaignMembers)
     .where(
       and(
-        eq(campaignMembers.campaignId, params.campaignId),
-        eq(campaignMembers.userId, params.userId)
+        eq(campaignMembers.campaignId, campaignId),
+        eq(campaignMembers.userId, userId)
       )
     )
     .returning()

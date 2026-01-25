@@ -6,8 +6,9 @@ import { eq, and } from 'drizzle-orm'
 // GET /api/campaigns/[campaignId]/members - List all members
 export async function GET(
   request: Request,
-  { params }: { params: { campaignId: string } }
+  { params }: { params: Promise<{ campaignId: string }> }
 ) {
+  const { campaignId } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
@@ -15,7 +16,7 @@ export async function GET(
   }
 
   const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, params.campaignId),
+    where: eq(campaigns.id, campaignId),
     with: {
       owner: {
         columns: {

@@ -6,8 +6,9 @@ import { eq, and } from 'drizzle-orm'
 // DELETE /api/campaigns/[campaignId]/invites/[code] - Revoke an invite
 export async function DELETE(
   request: Request,
-  { params }: { params: { campaignId: string; code: string } }
+  { params }: { params: Promise<{ campaignId: string; code: string }> }
 ) {
+  const { campaignId, code } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
@@ -15,7 +16,7 @@ export async function DELETE(
   }
 
   const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, params.campaignId),
+    where: eq(campaigns.id, campaignId),
     with: {
       members: true,
     },
@@ -40,8 +41,8 @@ export async function DELETE(
     .delete(campaignInvites)
     .where(
       and(
-        eq(campaignInvites.campaignId, params.campaignId),
-        eq(campaignInvites.code, params.code)
+        eq(campaignInvites.campaignId, campaignId),
+        eq(campaignInvites.code, code)
       )
     )
     .returning()

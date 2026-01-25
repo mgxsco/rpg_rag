@@ -5,17 +5,23 @@ import { eq, and } from 'drizzle-orm'
 import { syncNoteEmbeddings } from '@/lib/ai/embeddings'
 import { syncEntityEmbeddings } from '@/lib/ai/entity-embeddings'
 import { syncNoteLinks } from '@/lib/wikilinks/sync'
+import { withRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
 
 // Regenerate embeddings for all entities (and legacy notes) in a campaign
 export async function POST(
   request: Request,
-  { params }: { params: { campaignId: string } }
+  { params }: { params: Promise<{ campaignId: string }> }
 ) {
+  const { campaignId } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+
+  // Rate limit check (reindex is a bulk operation)
+  const rateLimitResponse = withRateLimit(session.user.id, 'reindex', RATE_LIMITS.reindex)
+  if (rateLimitResponse) return rateLimitResponse
 
   // Check if JINA_API_KEY is configured
   if (!process.env.JINA_API_KEY) {
@@ -26,7 +32,7 @@ export async function POST(
 
   // Check ownership/membership
   const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, params.campaignId),
+    where: eq(campaigns.id, campaignId),
   })
 
   if (!campaign) {
@@ -35,7 +41,7 @@ export async function POST(
 
   const membership = await db.query.campaignMembers.findFirst({
     where: and(
-      eq(campaignMembers.campaignId, params.campaignId),
+      eq(campaignMembers.campaignId, campaignId),
       eq(campaignMembers.userId, session.user.id)
     ),
   })
@@ -57,7 +63,7 @@ export async function POST(
   const allEntities = await db
     .select()
     .from(entities)
-    .where(eq(entities.campaignId, params.campaignId))
+    .where(eq(entities.campaignId, campaignId))
 
   console.log(`[Reindex] Found ${allEntities.length} entities to process`)
 
@@ -67,7 +73,7 @@ export async function POST(
 
       await syncEntityEmbeddings(
         entity.id,
-        params.campaignId,
+        campaignId,
         entity.name,
         entity.content || ''
       )
@@ -89,7 +95,7 @@ export async function POST(
   const allNotes = await db
     .select()
     .from(notes)
-    .where(eq(notes.campaignId, params.campaignId))
+    .where(eq(notes.campaignId, campaignId))
 
   console.log(`[Reindex] Found ${allNotes.length} legacy notes to process`)
 
@@ -100,13 +106,13 @@ export async function POST(
       // Sync embeddings
       await syncNoteEmbeddings(
         note.id,
-        params.campaignId,
+        campaignId,
         note.title,
         note.content || ''
       )
 
       // Sync wikilinks
-      await syncNoteLinks(note.id, params.campaignId, note.content || '')
+      await syncNoteLinks(note.id, campaignId, note.content || '')
 
       results.push({ type: 'note', id: note.id, name: note.title, success: true })
     } catch (error) {

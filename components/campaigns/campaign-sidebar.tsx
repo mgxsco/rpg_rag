@@ -14,6 +14,11 @@ import {
   ScrollText,
   CalendarDays,
   Users,
+  BookMarked,
+  Swords,
+  Sparkles,
+  Heart,
+  Brain,
 } from 'lucide-react'
 
 interface CampaignSidebarProps {
@@ -21,10 +26,17 @@ interface CampaignSidebarProps {
   isDM: boolean
 }
 
+interface SidebarLink {
+  href: string
+  label: string
+  icon: typeof Home
+  exact?: boolean
+}
+
 export function CampaignSidebar({ campaignId, isDM }: CampaignSidebarProps) {
   const pathname = usePathname()
 
-  const links = [
+  const links: SidebarLink[] = [
     {
       href: `/campaigns/${campaignId}`,
       label: 'Overview',
@@ -40,6 +52,30 @@ export function CampaignSidebar({ campaignId, isDM }: CampaignSidebarProps) {
       href: `/campaigns/${campaignId}/sessions`,
       label: 'Sessions',
       icon: CalendarDays,
+    },
+    // Journal - available to everyone
+    {
+      href: `/campaigns/${campaignId}/journal`,
+      label: 'My Journal',
+      icon: BookMarked,
+    },
+    // Quests - available to everyone (DM sees as manager)
+    {
+      href: `/campaigns/${campaignId}/quests`,
+      label: isDM ? 'Quest Manager' : 'Quests',
+      icon: Swords,
+    },
+    // Session Prep - available to everyone
+    {
+      href: `/campaigns/${campaignId}/session-prep`,
+      label: 'Session Prep',
+      icon: Sparkles,
+    },
+    // Relationships - available to everyone
+    {
+      href: `/campaigns/${campaignId}/my-relationships`,
+      label: 'Relationships',
+      icon: Heart,
     },
     {
       href: `/campaigns/${campaignId}/notes`,
@@ -61,8 +97,14 @@ export function CampaignSidebar({ campaignId, isDM }: CampaignSidebarProps) {
       label: 'Barão Pedregulho',
       icon: MessageSquare,
     },
+    // DM-only links
     ...(isDM
       ? [
+          {
+            href: `/campaigns/${campaignId}/knowledge`,
+            label: 'Knowledge Manager',
+            icon: Brain,
+          },
           {
             href: `/campaigns/${campaignId}/settings`,
             label: 'Settings',

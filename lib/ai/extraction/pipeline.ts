@@ -300,7 +300,7 @@ async function extractFromChunk(
 
   const systemPrompt = getExtractionSystemPrompt(aggressiveness, languageInstruction, customPrompts)
 
-  const responseText = await generateSimple(model, systemPrompt, content, 8192)
+  const responseText = await generateSimple(model, systemPrompt, content, 2048)
 
   if (!responseText) {
     return { entities: [], relationships: [] }

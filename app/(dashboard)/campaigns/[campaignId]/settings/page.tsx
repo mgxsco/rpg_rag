@@ -28,7 +28,7 @@ import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
 import { useToast } from '@/components/ui/use-toast'
-import { Save, Trash2, RefreshCw, Loader2, Globe, Cog, Search, Network, AlertTriangle, MessageSquare, RotateCcw, Download, Cpu } from 'lucide-react'
+import { Save, Trash2, RefreshCw, Loader2, Globe, Cog, Search, Network, AlertTriangle, MessageSquare, RotateCcw, Download, Cpu, Share2, Copy, Check, ExternalLink } from 'lucide-react'
 import { ExportDialog } from '@/components/campaigns/export-dialog'
 import { getCampaignSettings, DEFAULT_SETTINGS, AGGRESSIVENESS_OPTIONS, CHUNK_SIZE_OPTIONS, LINK_LABEL_OPTIONS, DEFAULT_PROMPTS, CHAT_MODEL_OPTIONS, EXTRACTION_MODEL_OPTIONS } from '@/lib/campaign-settings'
 import type { CampaignSettings } from '@/lib/db/schema'
@@ -56,6 +56,8 @@ interface Campaign {
   description: string | null
   language: string
   settings: CampaignSettings | null
+  isPublic: boolean | null
+  publicSlug: string | null
 }
 
 export default function SettingsPage() {
@@ -66,6 +68,10 @@ export default function SettingsPage() {
   const [description, setDescription] = useState('')
   const [language, setLanguage] = useState('en')
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
+  const [isPublic, setIsPublic] = useState(false)
+  const [publicSlug, setPublicSlug] = useState('')
+  const [slugError, setSlugError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [reindexing, setReindexing] = useState(false)
@@ -84,12 +90,58 @@ export default function SettingsPage() {
         setDescription(data.description || '')
         setLanguage(data.language || 'en')
         setSettings(getCampaignSettings(data.settings))
+        setIsPublic(data.isPublic || false)
+        setPublicSlug(data.publicSlug || '')
       }
       setLoading(false)
     }
 
     loadData()
   }, [campaignId])
+
+  // Generate slug from campaign name
+  const generateSlug = () => {
+    const slug = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 50)
+    setPublicSlug(slug)
+    setSlugError(null)
+  }
+
+  // Validate slug format
+  const validateSlug = (slug: string) => {
+    if (!slug) {
+      setSlugError(null)
+      return
+    }
+    if (slug.length < 3) {
+      setSlugError('Slug must be at least 3 characters')
+      return
+    }
+    if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/.test(slug)) {
+      setSlugError('Slug can only contain lowercase letters, numbers, and hyphens')
+      return
+    }
+    if (/--/.test(slug)) {
+      setSlugError('Slug cannot contain consecutive hyphens')
+      return
+    }
+    setSlugError(null)
+  }
+
+  // Copy public URL to clipboard
+  const copyPublicUrl = async () => {
+    const url = `${window.location.origin}/public/${publicSlug}`
+    await navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+    toast({
+      title: 'Copied!',
+      description: 'Public URL copied to clipboard',
+    })
+  }
 
   const updateExtractionSetting = <K extends keyof typeof settings.extraction>(
     key: K,
@@ -161,7 +213,14 @@ export default function SettingsPage() {
     const res = await fetch(`/api/campaigns/${campaignId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, description, language, settings }),
+      body: JSON.stringify({
+        name,
+        description,
+        language,
+        settings,
+        isPublic,
+        publicSlug: isPublic ? publicSlug : null,
+      }),
     })
 
     if (!res.ok) {
@@ -316,6 +375,108 @@ export default function SettingsPage() {
                     This language is used for AI entity extraction and descriptions.
                   </p>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Share2 className="h-5 w-5" />
+                  Public Sharing
+                </CardTitle>
+                <CardDescription>
+                  Share your campaign wiki publicly with anyone
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Make Campaign Public</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Allow anyone to view your wiki without logging in
+                    </p>
+                  </div>
+                  <Switch
+                    checked={isPublic}
+                    onCheckedChange={setIsPublic}
+                  />
+                </div>
+
+                {isPublic && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="publicSlug">Public URL Slug</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="publicSlug"
+                          value={publicSlug}
+                          onChange={(e) => {
+                            setPublicSlug(e.target.value.toLowerCase())
+                            validateSlug(e.target.value.toLowerCase())
+                          }}
+                          placeholder="my-campaign"
+                          className={slugError ? 'border-destructive' : ''}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={generateSlug}
+                        >
+                          Generate
+                        </Button>
+                      </div>
+                      {slugError && (
+                        <p className="text-sm text-destructive">{slugError}</p>
+                      )}
+                      <p className="text-sm text-muted-foreground">
+                        URL-friendly name (lowercase letters, numbers, and hyphens)
+                      </p>
+                    </div>
+
+                    {publicSlug && !slugError && (
+                      <div className="space-y-2">
+                        <Label>Shareable Link</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            readOnly
+                            value={`${typeof window !== 'undefined' ? window.location.origin : ''}/public/${publicSlug}`}
+                            className="bg-muted"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={copyPublicUrl}
+                          >
+                            {copied ? (
+                              <Check className="h-4 w-4" />
+                            ) : (
+                              <Copy className="h-4 w-4" />
+                            )}
+                          </Button>
+                          <a
+                            href={`/public/${publicSlug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <Button type="button" variant="outline">
+                              <ExternalLink className="h-4 w-4" />
+                            </Button>
+                          </a>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="p-3 rounded-lg bg-muted/50 text-sm text-muted-foreground">
+                      <p className="font-medium mb-1">What&apos;s visible publicly:</p>
+                      <ul className="list-disc list-inside space-y-1">
+                        <li>Wiki entities (non-DM-only)</li>
+                        <li>Knowledge graph connections</li>
+                        <li>Session notes (non-DM-only)</li>
+                      </ul>
+                      <p className="mt-2">DM-only content is always hidden from public view.</p>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
 

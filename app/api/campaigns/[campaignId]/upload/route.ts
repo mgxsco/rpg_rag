@@ -113,8 +113,9 @@ Use [[Note Title]] wikilink syntax to reference other notes you're creating.`
 
 export async function POST(
   request: Request,
-  { params }: { params: { campaignId: string } }
+  { params }: { params: Promise<{ campaignId: string }> }
 ) {
+  const { campaignId } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
@@ -123,13 +124,13 @@ export async function POST(
 
   const membership = await db.query.campaignMembers.findFirst({
     where: and(
-      eq(campaignMembers.campaignId, params.campaignId),
+      eq(campaignMembers.campaignId, campaignId),
       eq(campaignMembers.userId, session.user.id)
     ),
   })
 
   const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, params.campaignId),
+    where: eq(campaigns.id, campaignId),
   })
 
   if (!campaign) {
@@ -229,7 +230,7 @@ export async function POST(
         while (true) {
           const existing = await db.query.notes.findFirst({
             where: and(
-              eq(notes.campaignId, params.campaignId),
+              eq(notes.campaignId, campaignId),
               eq(notes.slug, slug)
             ),
           })
@@ -242,7 +243,7 @@ export async function POST(
         const [newNote] = await db
           .insert(notes)
           .values({
-            campaignId: params.campaignId,
+            campaignId: campaignId,
             authorId: session.user.id,
             title: extracted.title,
             slug,
@@ -256,7 +257,7 @@ export async function POST(
         try {
           await syncNoteEmbeddings(
             newNote.id,
-            params.campaignId,
+            campaignId,
             newNote.title,
             newNote.content || ''
           )
@@ -267,7 +268,7 @@ export async function POST(
 
         // Sync wikilinks
         try {
-          await syncNoteLinks(newNote.id, params.campaignId, newNote.content || '')
+          await syncNoteLinks(newNote.id, campaignId, newNote.content || '')
         } catch (error) {
           console.error(`[Upload] Failed to sync links for ${newNote.title}:`, error)
         }

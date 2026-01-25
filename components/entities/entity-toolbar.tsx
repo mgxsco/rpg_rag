@@ -10,7 +10,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { LayoutGrid, List, Search, X } from 'lucide-react'
+import { Toggle } from '@/components/ui/toggle'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { LayoutGrid, List, Search, X, Brain } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useCallback, useState, useTransition } from 'react'
 
@@ -19,6 +26,8 @@ interface EntityToolbarProps {
   view: 'grid' | 'list'
   sort: string
   search?: string
+  characterId?: string // Player's character ID for knowledge filter
+  showKnowledgeToggle?: boolean // Whether to show the knowledge toggle
 }
 
 const SORT_OPTIONS = [
@@ -29,11 +38,20 @@ const SORT_OPTIONS = [
   { value: 'oldest', label: 'Oldest First' },
 ]
 
-export function EntityToolbar({ campaignId, view, sort, search }: EntityToolbarProps) {
+export function EntityToolbar({
+  campaignId,
+  view,
+  sort,
+  search,
+  characterId,
+  showKnowledgeToggle = false,
+}: EntityToolbarProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
   const [searchValue, setSearchValue] = useState(search || '')
+  const knownByParam = searchParams.get('knownBy')
+  const isKnowledgeFilterActive = !!knownByParam
 
   const updateParams = useCallback(
     (key: string, value: string | null) => {
@@ -66,6 +84,14 @@ export function EntityToolbar({ campaignId, view, sort, search }: EntityToolbarP
   const clearSearch = () => {
     setSearchValue('')
     updateParams('search', null)
+  }
+
+  const toggleKnowledgeFilter = () => {
+    if (isKnowledgeFilterActive) {
+      updateParams('knownBy', null)
+    } else if (characterId) {
+      updateParams('knownBy', characterId)
+    }
   }
 
   return (
@@ -133,6 +159,30 @@ export function EntityToolbar({ campaignId, view, sort, search }: EntityToolbarP
           )}
         </div>
       </form>
+
+      {/* Knowledge Filter Toggle (for players) */}
+      {showKnowledgeToggle && characterId && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Toggle
+                pressed={isKnowledgeFilterActive}
+                onPressedChange={toggleKnowledgeFilter}
+                className={cn(
+                  'shrink-0 h-10 px-3 gap-2',
+                  isKnowledgeFilterActive && 'bg-primary text-primary-foreground'
+                )}
+              >
+                <Brain className="h-4 w-4" />
+                <span className="hidden sm:inline">My Knowledge</span>
+              </Toggle>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{isKnowledgeFilterActive ? 'Show all entities' : 'Show only what my character knows'}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
     </div>
   )
 }

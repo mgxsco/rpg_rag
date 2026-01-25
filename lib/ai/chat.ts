@@ -8,6 +8,8 @@ export interface ChatOptions {
   isDM: boolean
   campaignName?: string
   settings?: CampaignSettings | null
+  systemPromptOverride?: string // Optional override for the system prompt
+  skipRag?: boolean // Skip RAG search and use provided context directly
 }
 
 export interface ChatResponse {
@@ -27,26 +29,29 @@ export async function generateChatResponse(
   // Get campaign settings with defaults
   const settings = getCampaignSettings(options.settings)
 
-  // Search for relevant chunks using campaign settings
-  const chunks = await searchSimilarChunks(campaignId, userMessage, {
-    limit: settings.search.resultLimit,
-    threshold: settings.search.similarityThreshold,
-    excludeDmOnly: !options.isDM,
-  })
+  // Search for relevant chunks using campaign settings (unless skipRag is true)
+  let chunks: SearchResult[] = []
+  let context = ''
 
-  // Build context from chunks
-  const context = buildContext(chunks)
+  if (!options.skipRag) {
+    chunks = await searchSimilarChunks(campaignId, userMessage, {
+      limit: settings.search.resultLimit,
+      threshold: settings.search.similarityThreshold,
+      excludeDmOnly: !options.isDM,
+    })
+    context = buildContext(chunks)
+  }
 
   // Get the custom or default system prompt
-  const baseSystemPrompt = settings.prompts.chatSystemPrompt || DEFAULT_PROMPTS.chatSystemPrompt
+  const baseSystemPrompt = options.systemPromptOverride ||
+    settings.prompts.chatSystemPrompt ||
+    DEFAULT_PROMPTS.chatSystemPrompt
 
   // Build the system prompt with context
   const systemPrompt = `${baseSystemPrompt}
 
 Campaign: ${options.campaignName || 'Unknown Campaign'}
-
-Context from campaign knowledge base:
-${context}`
+${context ? `\nContext from campaign knowledge base:\n${context}` : ''}`
 
   // Prepare messages
   const messages = [

@@ -12,8 +12,9 @@ import { getCampaignSettings } from '@/lib/campaign-settings'
  */
 export async function POST(
   request: Request,
-  { params }: { params: { campaignId: string; slug: string } }
+  { params }: { params: Promise<{ campaignId: string; slug: string }> }
 ) {
+  const { campaignId, slug } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
@@ -23,13 +24,13 @@ export async function POST(
   // Check membership
   const membership = await db.query.campaignMembers.findFirst({
     where: and(
-      eq(campaignMembers.campaignId, params.campaignId),
+      eq(campaignMembers.campaignId, campaignId),
       eq(campaignMembers.userId, session.user.id)
     ),
   })
 
   const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, params.campaignId),
+    where: eq(campaigns.id, campaignId),
   })
 
   if (!campaign) {
@@ -43,8 +44,8 @@ export async function POST(
   // Get the note
   const note = await db.query.notes.findFirst({
     where: and(
-      eq(notes.campaignId, params.campaignId),
-      eq(notes.slug, params.slug)
+      eq(notes.campaignId, campaignId),
+      eq(notes.slug, slug)
     ),
   })
 
@@ -61,7 +62,7 @@ export async function POST(
     const [doc] = await db
       .insert(documents)
       .values({
-        campaignId: params.campaignId,
+        campaignId: campaignId,
         name: `Note: ${note.title}`,
         content: note.content,
         fileType: 'text/markdown',
@@ -70,7 +71,7 @@ export async function POST(
       .returning()
 
     // Get existing entity names for deduplication
-    const existingNames = await getExistingEntityNames(params.campaignId)
+    const existingNames = await getExistingEntityNames(campaignId)
 
     // Get campaign settings for extraction
     const language = (campaign as any).language || 'pt-BR'
@@ -107,7 +108,7 @@ export async function POST(
       try {
         // Check for existing entity
         const existing = await findExistingEntity(
-          params.campaignId,
+          campaignId,
           extracted.name,
           extracted.aliases
         )
@@ -137,7 +138,7 @@ export async function POST(
         const [newEntity] = await db
           .insert(entities)
           .values({
-            campaignId: params.campaignId,
+            campaignId: campaignId,
             name: extracted.name,
             canonicalName: extracted.canonicalName,
             entityType: extracted.type,
@@ -179,11 +180,11 @@ export async function POST(
 
         // Try to find in database if not in map
         if (!sourceId) {
-          const sourceEntity = await findExistingEntity(params.campaignId, rel.sourceEntity, [])
+          const sourceEntity = await findExistingEntity(campaignId, rel.sourceEntity, [])
           if (sourceEntity) sourceId = sourceEntity.id
         }
         if (!targetId) {
-          const targetEntity = await findExistingEntity(params.campaignId, rel.targetEntity, [])
+          const targetEntity = await findExistingEntity(campaignId, rel.targetEntity, [])
           if (targetEntity) targetId = targetEntity.id
         }
 
@@ -195,7 +196,7 @@ export async function POST(
         await db
           .insert(relationships)
           .values({
-            campaignId: params.campaignId,
+            campaignId: campaignId,
             sourceEntityId: sourceId,
             targetEntityId: targetId,
             relationshipType: rel.relationshipType,

@@ -99,7 +99,9 @@ export function renderWikilinks(
   content: string,
   noteMap: Map<string, string>, // title.toLowerCase() -> slug or entityId
   campaignId: string,
-  isEntityMode: boolean = false
+  isEntityMode: boolean = false,
+  isPublicMode: boolean = false,
+  publicSlug?: string
 ): string {
   return content.replace(
     /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g,
@@ -109,9 +111,14 @@ export function renderWikilinks(
       const id = noteMap.get(targetLower)
 
       if (id) {
-        const path = isEntityMode
-          ? `/campaigns/${campaignId}/entities/${id}`
-          : `/campaigns/${campaignId}/notes/${id}`
+        let path: string
+        if (isPublicMode && publicSlug) {
+          path = `/public/${publicSlug}/entities/${id}`
+        } else if (isEntityMode) {
+          path = `/campaigns/${campaignId}/entities/${id}`
+        } else {
+          path = `/campaigns/${campaignId}/notes/${id}`
+        }
         return `[${displayText}](${path})`
       } else {
         // Broken link - return with special marker

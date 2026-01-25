@@ -150,7 +150,7 @@ export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithRevie
       )
     : existingEntities
 
-  // Handle file upload and extraction with streaming progress
+  // Handle file upload and extraction with client-side chunking
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return
 
@@ -167,91 +167,170 @@ export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithRevie
     setFileContent(content)
 
     try {
-      setProgressSteps((prev) => [...prev, `Uploading ${file.name}...`])
+      setProgressSteps((prev) => [...prev, `Parsing ${file.name}...`])
 
-      // Send to streaming extract endpoint
+      // Step 1: Parse document and get chunks (fast, no AI)
       const formData = new FormData()
       formData.append('file', file)
+      formData.append('chunkSize', '3000')
 
-      const response = await fetch(`/api/campaigns/${campaignId}/documents/extract-stream`, {
+      const parseResponse = await fetch(`/api/campaigns/${campaignId}/documents/parse`, {
         method: 'POST',
         body: formData,
       })
 
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || 'Extraction failed')
+      if (!parseResponse.ok) {
+        const data = await parseResponse.json()
+        throw new Error(data.error || 'Parse failed')
       }
 
-      // Process SSE stream
-      const reader = response.body?.getReader()
-      const decoder = new TextDecoder()
+      const parseResult = await parseResponse.json()
+      const { chunks, totalChunks, existingEntityNames, language } = parseResult
 
-      if (!reader) {
-        throw new Error('No response stream')
-      }
+      setProgressSteps((prev) => [
+        ...prev,
+        `Parsed ${parseResult.contentLength.toLocaleString()} characters into ${totalChunks} chunks`,
+      ])
 
-      let buffer2 = ''
+      // Step 2: Extract entities from each chunk individually
+      const allEntities: StagedEntity[] = []
+      const allRelationships: StagedRelationship[] = []
+      const seenEntityNames = new Set<string>()
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+      for (let i = 0; i < chunks.length; i++) {
+        setExtractionProgress({
+          stage: 'extracting',
+          current: i + 1,
+          total: totalChunks,
+          message: `Processing chunk ${i + 1}/${totalChunks}...`,
+        })
 
-        buffer2 += decoder.decode(value, { stream: true })
-        const lines = buffer2.split('\n')
-        buffer2 = lines.pop() || ''
+        try {
+          const chunkResponse = await fetch(`/api/campaigns/${campaignId}/extract-step/chunk`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chunkContent: chunks[i],
+              chunkIndex: i,
+              totalChunks,
+              language,
+              existingEntityNames: [...existingEntityNames, ...Array.from(seenEntityNames)],
+              settings: {
+                aggressiveness: 'obsessive',
+                extractionModel: 'claude-3-5-haiku-20241022',
+                confidenceThreshold: 0.5,
+              },
+            }),
+          })
 
-        let currentEvent = ''
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            currentEvent = line.slice(7)
-          } else if (line.startsWith('data: ') && currentEvent) {
-            try {
-              const data = JSON.parse(line.slice(6))
-
-              switch (currentEvent) {
-                case 'progress':
-                  setProgressSteps((prev) => [...prev, data.message])
-                  break
-
-                case 'extraction':
-                  setExtractionProgress({
-                    stage: data.stage,
-                    current: data.current,
-                    total: data.total,
-                    message: data.message,
-                  })
-                  break
-
-                case 'entity':
-                  setDiscoveredEntities((prev) => [
-                    ...prev,
-                    { name: data.name, type: data.type },
-                  ])
-                  break
-
-                case 'error':
-                  throw new Error(data.message)
-
-                case 'complete':
-                  const result = data as ExtractPreviewResponse
-                  setEntities(result.extractedEntities)
-                  setRelationships(result.extractedRelationships)
-                  setExistingMatches(result.existingEntityMatches)
-                  setProgressSteps((prev) => [
-                    ...prev,
-                    `Extraction complete: ${result.extractedEntities.length} entities`,
-                  ])
-                  setPhase('review')
-                  break
-              }
-            } catch (e) {
-              // Skip invalid JSON
-            }
-            currentEvent = ''
+          if (!chunkResponse.ok) {
+            console.warn(`Chunk ${i + 1} failed, continuing...`)
+            continue
           }
+
+          const chunkResult = await chunkResponse.json()
+
+          // Add new entities (dedupe by canonical name)
+          for (const entity of chunkResult.entities || []) {
+            if (!seenEntityNames.has(entity.canonicalName)) {
+              seenEntityNames.add(entity.canonicalName)
+              allEntities.push(entity)
+
+              // Show discovered entity
+              setDiscoveredEntities((prev) => [
+                ...prev,
+                { name: entity.name, type: entity.entityType },
+              ])
+            }
+          }
+
+          // Collect relationships
+          if (chunkResult.rawRelationships) {
+            for (const rel of chunkResult.rawRelationships) {
+              allRelationships.push({
+                tempId: crypto.randomUUID(),
+                sourceEntityTempId: '', // Will be resolved later
+                targetEntityTempId: '',
+                sourceEntityName: rel.sourceEntity,
+                targetEntityName: rel.targetEntity,
+                relationshipType: rel.relationshipType,
+                reverseLabel: rel.reverseLabel,
+                excerpt: rel.excerpt || '',
+                status: 'pending' as const,
+              })
+            }
+          }
+
+          setProgressSteps((prev) => [
+            ...prev,
+            `Chunk ${i + 1}: Found ${chunkResult.entities?.length || 0} entities`,
+          ])
+        } catch (chunkError) {
+          console.error(`Error processing chunk ${i + 1}:`, chunkError)
+          setProgressSteps((prev) => [
+            ...prev,
+            `Chunk ${i + 1}: Error (skipped)`,
+          ])
         }
       }
+
+      setProgressSteps((prev) => [
+        ...prev,
+        `Extraction complete: ${allEntities.length} entities found`,
+      ])
+
+      // Step 3: Build entity lookup and resolve relationship tempIds
+      const nameToTempId = new Map<string, string>()
+      for (const entity of allEntities) {
+        nameToTempId.set(entity.name.toLowerCase(), entity.tempId)
+        for (const alias of entity.aliases || []) {
+          nameToTempId.set(alias.toLowerCase(), entity.tempId)
+        }
+      }
+
+      const resolvedRelationships = allRelationships
+        .map((rel) => ({
+          ...rel,
+          sourceEntityTempId: nameToTempId.get(rel.sourceEntityName.toLowerCase()) || '',
+          targetEntityTempId: nameToTempId.get(rel.targetEntityName.toLowerCase()) || '',
+        }))
+        .filter((rel) => rel.sourceEntityTempId && rel.targetEntityTempId)
+
+      // Step 4: Check for duplicates with existing entities
+      const existingEntityMatches: EntityMatch[] = []
+      const existingEntitiesData = await fetch(`/api/campaigns/${campaignId}/entities`)
+        .then((r) => r.json())
+        .then((d) => d.entities || [])
+        .catch(() => [])
+
+      const canonicalMap = new Map<string, any>()
+      for (const entity of existingEntitiesData) {
+        canonicalMap.set(entity.canonicalName?.toLowerCase() || '', entity)
+      }
+
+      for (const staged of allEntities) {
+        const exactMatch = canonicalMap.get(staged.canonicalName.toLowerCase())
+        if (exactMatch) {
+          existingEntityMatches.push({
+            stagedTempId: staged.tempId,
+            existingEntity: {
+              id: exactMatch.id,
+              name: exactMatch.name,
+              entityType: exactMatch.entityType,
+              aliases: exactMatch.aliases || [],
+              canonicalName: exactMatch.canonicalName,
+            },
+            matchType: 'exact',
+            confidence: 1.0,
+          })
+        }
+      }
+
+      setEntities(allEntities)
+      setRelationships(resolvedRelationships)
+      setExistingMatches(existingEntityMatches)
+      setExtractionProgress(null)
+      setPhase('review')
     } catch (error) {
       console.error('Extraction error:', error)
       setProgressSteps((prev) => [

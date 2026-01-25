@@ -17,8 +17,9 @@ function generateInviteCode(): string {
 // GET /api/campaigns/[campaignId]/invites - List all active invites
 export async function GET(
   request: Request,
-  { params }: { params: { campaignId: string } }
+  { params }: { params: Promise<{ campaignId: string }> }
 ) {
+  const { campaignId } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
@@ -26,7 +27,7 @@ export async function GET(
   }
 
   const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, params.campaignId),
+    where: eq(campaigns.id, campaignId),
     with: {
       members: true,
     },
@@ -52,7 +53,7 @@ export async function GET(
   // Get active invites (not expired and has uses remaining)
   const invites = await db.query.campaignInvites.findMany({
     where: and(
-      eq(campaignInvites.campaignId, params.campaignId),
+      eq(campaignInvites.campaignId, campaignId),
       or(
         isNull(campaignInvites.expiresAt),
         gt(campaignInvites.expiresAt, new Date())
@@ -87,8 +88,9 @@ export async function GET(
 // POST /api/campaigns/[campaignId]/invites - Create a new invite
 export async function POST(
   request: Request,
-  { params }: { params: { campaignId: string } }
+  { params }: { params: Promise<{ campaignId: string }> }
 ) {
+  const { campaignId } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
@@ -96,7 +98,7 @@ export async function POST(
   }
 
   const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, params.campaignId),
+    where: eq(campaigns.id, campaignId),
     with: {
       members: true,
     },
@@ -166,7 +168,7 @@ export async function POST(
   const [invite] = await db
     .insert(campaignInvites)
     .values({
-      campaignId: params.campaignId,
+      campaignId: campaignId,
       code,
       role,
       usesRemaining: usesLimit || null,

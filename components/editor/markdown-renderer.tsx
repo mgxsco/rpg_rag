@@ -10,6 +10,8 @@ interface MarkdownRendererProps {
   campaignId: string
   noteMap: Map<string, string> // title.toLowerCase() -> slug or entityId
   isEntityMode?: boolean // Link to entities instead of notes
+  isPublicMode?: boolean // Use public URLs for links
+  publicSlug?: string // The public campaign slug
 }
 
 export function MarkdownRenderer({
@@ -17,9 +19,11 @@ export function MarkdownRenderer({
   campaignId,
   noteMap,
   isEntityMode = false,
+  isPublicMode = false,
+  publicSlug,
 }: MarkdownRendererProps) {
   // Pre-process content to convert wikilinks to markdown links
-  const processedContent = renderWikilinks(content, noteMap, campaignId, isEntityMode)
+  const processedContent = renderWikilinks(content, noteMap, campaignId, isEntityMode, isPublicMode, publicSlug)
 
   return (
     <div className="prose-content">
@@ -27,7 +31,7 @@ export function MarkdownRenderer({
         remarkPlugins={[remarkGfm]}
         components={{
           a: ({ href, children }) => {
-            if (href?.startsWith('/campaigns/')) {
+            if (href?.startsWith('/campaigns/') || href?.startsWith('/public/')) {
               return (
                 <Link href={href} className="wikilink">
                   {children}

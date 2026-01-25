@@ -4,8 +4,9 @@ import { getBacklinks } from '@/lib/wikilinks/sync'
 
 export async function GET(
   request: Request,
-  { params }: { params: { campaignId: string; slug: string } }
+  { params }: { params: Promise<{ campaignId: string; slug: string }> }
 ) {
+  const { campaignId, slug } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
@@ -13,7 +14,7 @@ export async function GET(
   }
 
   // The slug param here is actually the noteId for backlinks
-  const backlinks = await getBacklinks(params.slug)
+  const backlinks = await getBacklinks(slug)
 
   return NextResponse.json({
     backlinks: backlinks.map((note) => ({

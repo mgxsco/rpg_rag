@@ -2,11 +2,13 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { db, campaigns, campaignMembers, users } from '@/lib/db'
 import { eq, and } from 'drizzle-orm'
+import { validatePublicSlug, isSlugAvailable } from '@/lib/api/public-access'
 
 export async function GET(
   request: Request,
-  { params }: { params: { campaignId: string } }
+  { params }: { params: Promise<{ campaignId: string }> }
 ) {
+  const { campaignId } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
@@ -14,7 +16,7 @@ export async function GET(
   }
 
   const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, params.campaignId),
+    where: eq(campaigns.id, campaignId),
     with: {
       owner: true,
       members: {
@@ -50,8 +52,9 @@ export async function GET(
 
 export async function PUT(
   request: Request,
-  { params }: { params: { campaignId: string } }
+  { params }: { params: Promise<{ campaignId: string }> }
 ) {
+  const { campaignId } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
@@ -59,7 +62,7 @@ export async function PUT(
   }
 
   const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, params.campaignId),
+    where: eq(campaigns.id, campaignId),
   })
 
   if (!campaign) {
@@ -71,7 +74,7 @@ export async function PUT(
   }
 
   const body = await request.json()
-  const { name, description, language, settings } = body
+  const { name, description, language, settings, isPublic, publicSlug } = body
 
   const updateData: Record<string, any> = {
     name,
@@ -87,10 +90,37 @@ export async function PUT(
     updateData.settings = settings
   }
 
+  // Handle public sharing settings
+  if (isPublic !== undefined) {
+    updateData.isPublic = isPublic
+
+    if (isPublic && publicSlug) {
+      // Validate slug format
+      const slugError = validatePublicSlug(publicSlug)
+      if (slugError) {
+        return NextResponse.json({ error: slugError }, { status: 400 })
+      }
+
+      // Check slug availability (excluding current campaign)
+      const available = await isSlugAvailable(publicSlug, campaignId)
+      if (!available) {
+        return NextResponse.json(
+          { error: 'This slug is already taken by another campaign' },
+          { status: 400 }
+        )
+      }
+
+      updateData.publicSlug = publicSlug
+    } else if (!isPublic) {
+      // Clear slug when making private
+      updateData.publicSlug = null
+    }
+  }
+
   const [updated] = await db
     .update(campaigns)
     .set(updateData)
-    .where(eq(campaigns.id, params.campaignId))
+    .where(eq(campaigns.id, campaignId))
     .returning()
 
   return NextResponse.json(updated)
@@ -98,8 +128,9 @@ export async function PUT(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { campaignId: string } }
+  { params }: { params: Promise<{ campaignId: string }> }
 ) {
+  const { campaignId } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
@@ -107,7 +138,7 @@ export async function DELETE(
   }
 
   const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, params.campaignId),
+    where: eq(campaigns.id, campaignId),
   })
 
   if (!campaign) {
@@ -118,7 +149,7 @@ export async function DELETE(
     return NextResponse.json({ error: 'Only the owner can delete' }, { status: 403 })
   }
 
-  await db.delete(campaigns).where(eq(campaigns.id, params.campaignId))
+  await db.delete(campaigns).where(eq(campaigns.id, campaignId))
 
   return NextResponse.json({ success: true })
 }

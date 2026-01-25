@@ -23,8 +23,9 @@ async function parsePDF(buffer: Buffer): Promise<string> {
  */
 export async function POST(
   request: Request,
-  { params }: { params: { campaignId: string } }
+  { params }: { params: Promise<{ campaignId: string }> }
 ) {
+  const { campaignId } = await params
   const session = await getSession()
 
   if (!session?.user?.id) {
@@ -34,13 +35,13 @@ export async function POST(
   // Check membership
   const membership = await db.query.campaignMembers.findFirst({
     where: and(
-      eq(campaignMembers.campaignId, params.campaignId),
+      eq(campaignMembers.campaignId, campaignId),
       eq(campaignMembers.userId, session.user.id)
     ),
   })
 
   const campaign = await db.query.campaigns.findFirst({
-    where: eq(campaigns.id, params.campaignId),
+    where: eq(campaigns.id, campaignId),
   })
 
   if (!campaign) {
@@ -101,7 +102,7 @@ export async function POST(
     const language = (campaign as any).language || 'en'
 
     // Get existing entity names for deduplication
-    const existingNames = await getExistingEntityNames(params.campaignId)
+    const existingNames = await getExistingEntityNames(campaignId)
 
     // Get campaign settings for extraction
     const campaignSettings = getCampaignSettings((campaign as any).settings)
@@ -179,7 +180,7 @@ export async function POST(
       // Check for exact name match
       const exactMatch = await db.query.entities.findFirst({
         where: and(
-          eq(entities.campaignId, params.campaignId),
+          eq(entities.campaignId, campaignId),
           ilike(entities.canonicalName, staged.canonicalName)
         ),
         columns: {
@@ -216,7 +217,7 @@ export async function POST(
 
         const aliasMatch = await db.query.entities.findFirst({
           where: and(
-            eq(entities.campaignId, params.campaignId),
+            eq(entities.campaignId, campaignId),
             ilike(entities.canonicalName, aliasCanonical)
           ),
           columns: {

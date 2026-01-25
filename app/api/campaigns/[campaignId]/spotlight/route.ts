@@ -5,6 +5,7 @@ import { eq, and, desc } from 'drizzle-orm'
 import { generateResponse } from '@/lib/ai/client'
 import { getCampaignSettings } from '@/lib/campaign-settings'
 import type { AIModel } from '@/lib/db/schema'
+import { withRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
 
 interface SpotlightCache {
   data: SpotlightData
@@ -294,6 +295,10 @@ export async function POST(
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    // Rate limit check
+    const rateLimitResponse = withRateLimit(session.user.id, 'spotlight', RATE_LIMITS.spotlight)
+    if (rateLimitResponse) return rateLimitResponse
 
     const { campaignId } = await params
 

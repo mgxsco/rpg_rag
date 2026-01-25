@@ -1,15 +1,15 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth'
-import { db, campaigns, campaignMembers, entities } from '@/lib/db'
-import { eq, and, desc, asc } from 'drizzle-orm'
+import { db, campaigns, campaignMembers, entities, characterKnowledge } from '@/lib/db'
+import { eq, and, desc, asc, inArray } from 'drizzle-orm'
 import { Button } from '@/components/ui/button'
 import { CampaignSidebar } from '@/components/campaigns/campaign-sidebar'
 import { EntityCard } from '@/components/entities/entity-card'
 import { EntityStats } from '@/components/entities/entity-stats'
 import { EntityToolbar } from '@/components/entities/entity-toolbar'
 import { EntityListRow } from '@/components/entities/entity-list-row'
-import { Filter, Plus, Upload, AlertTriangle } from 'lucide-react'
+import { Filter, Plus, Upload, AlertTriangle, Network } from 'lucide-react'
 import { Entity } from '@/lib/db/schema'
 
 export default async function EntitiesPage({
@@ -17,10 +17,10 @@ export default async function EntitiesPage({
   searchParams,
 }: {
   params: Promise<{ campaignId: string }>
-  searchParams: Promise<{ type?: string; search?: string; view?: string; sort?: string }>
+  searchParams: Promise<{ type?: string; search?: string; view?: string; sort?: string; knownBy?: string }>
 }) {
   const { campaignId } = await params
-  const { type, search, view = 'grid', sort = 'updated' } = await searchParams
+  const { type, search, view = 'grid', sort = 'updated', knownBy } = await searchParams
 
   const session = await getSession()
   if (!session?.user?.id) {
@@ -39,6 +39,28 @@ export default async function EntitiesPage({
   })
 
   const isDM = membership?.role === 'dm' || campaign?.ownerId === session.user.id
+
+  // Get the player's character for knowledge filtering (only for players)
+  let playerCharacterId: string | undefined
+  if (!isDM && membership) {
+    const playerCharacter = await db.query.entities.findFirst({
+      where: and(
+        eq(entities.campaignId, campaignId),
+        eq(entities.entityType, 'player_character'),
+        eq(entities.playerId, membership.id)
+      ),
+    })
+    playerCharacterId = playerCharacter?.id
+  }
+
+  // Get known entity IDs if filtering by knowledge
+  let knownEntityIds: Set<string> | null = null
+  if (knownBy && playerCharacterId) {
+    const knowledge = await db.query.characterKnowledge.findMany({
+      where: eq(characterKnowledge.characterId, knownBy),
+    })
+    knownEntityIds = new Set(knowledge.map((k) => k.entityId))
+  }
 
   // Get entities - wrapped in try/catch in case table doesn't exist yet
   let allEntities: Entity[] = []
@@ -83,6 +105,11 @@ export default async function EntitiesPage({
     )
   }
 
+  // Filter by character knowledge
+  if (knownEntityIds) {
+    allEntities = allEntities.filter((e) => knownEntityIds.has(e.id))
+  }
+
   // Apply sorting
   switch (sort) {
     case 'name-asc':
@@ -117,6 +144,14 @@ export default async function EntitiesPage({
             </p>
           </div>
           <div className="flex gap-2">
+            {isDM && (
+              <Link href={`/campaigns/${campaignId}/entities/discover-relationships`}>
+                <Button variant="outline" size="sm" className="sm:size-default">
+                  <Network className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Discover Relationships</span>
+                </Button>
+              </Link>
+            )}
             <Link href={`/campaigns/${campaignId}/entities/upload`}>
               <Button variant="outline" size="sm" className="sm:size-default">
                 <Upload className="h-4 w-4 sm:mr-2" />
@@ -146,6 +181,8 @@ export default async function EntitiesPage({
           view={view as 'grid' | 'list'}
           sort={sort}
           search={search}
+          characterId={playerCharacterId}
+          showKnowledgeToggle={!isDM && !!playerCharacterId}
         />
 
         {/* Content */}

@@ -135,6 +135,7 @@ export interface CampaignSettings {
   }
   prompts?: {
     chatSystemPrompt?: string
+    sessionPrepPrompt?: string
     extractionConservativePrompt?: string
     extractionBalancedPrompt?: string
     extractionObsessivePrompt?: string
@@ -151,6 +152,9 @@ export const campaigns = pgTable('campaigns', {
   ownerId: uuid('owner_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
+  // Public sharing
+  isPublic: boolean('is_public').default(false),
+  publicSlug: text('public_slug').unique(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 })
@@ -466,6 +470,7 @@ export const commonEntityTypes = [
   'ability',
   'condition',
   'material',
+  'journal_entry', // Player personal journal entries
 ] as const
 
 // Legacy alias for backward compatibility
@@ -500,8 +505,15 @@ export const entities = pgTable(
     inGameDate: text('in_game_date'),
     sessionStatus: text('session_status'), // 'planned' | 'completed' | 'cancelled'
 
-    // Player character ownership (only used when entityType = 'player_character')
+    // Quest-specific fields (only used when entityType = 'quest')
+    questStatus: text('quest_status'), // 'active' | 'completed' | 'failed' | 'abandoned'
+
+    // Player character ownership (only used when entityType = 'player_character' or 'journal_entry')
     playerId: uuid('player_id').references(() => campaignMembers.id, { onDelete: 'set null' }),
+
+    // AI-generated summary from accumulated facts
+    summary: text('summary'),
+    summaryGeneratedAt: timestamp('summary_generated_at'),
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -568,6 +580,7 @@ export const relationships = pgTable(
 
     relationshipType: text('relationship_type').notNull(),
     reverseLabel: text('reverse_label'), // e.g., "residents" for "lives_in"
+    sentiment: text('sentiment').default('neutral'), // 'friendly' | 'neutral' | 'hostile' | 'unknown'
 
     // Source tracking
     documentId: uuid('document_id').references(() => documents.id),
@@ -660,6 +673,7 @@ export const entitiesRelations = relations(entities, ({ one, many }) => ({
   chunks: many(chunks),
   versions: many(entityVersions),
   comments: many(entityComments),
+  facts: many(entityFacts),
   outgoingRelationships: many(relationships, { relationName: 'sourceEntity' }),
   incomingRelationships: many(relationships, { relationName: 'targetEntity' }),
 }))
@@ -743,6 +757,8 @@ export type EntityVersion = typeof entityVersions.$inferSelect
 export type EntityType = Entity['entityType']
 export type RelationshipType = (typeof relationshipTypeEnum)[number]
 export type SessionStatus = 'planned' | 'completed' | 'cancelled'
+export type QuestStatus = 'active' | 'completed' | 'failed' | 'abandoned'
+export type RelationshipSentiment = 'friendly' | 'neutral' | 'hostile' | 'unknown'
 
 // Chat types
 export type Message = typeof messages.$inferSelect
@@ -784,3 +800,158 @@ export const entityCommentsRelations = relations(entityComments, ({ one }) => ({
 }))
 
 export type EntityComment = typeof entityComments.$inferSelect
+
+// ============================================
+// Character Knowledge (What does my character know?)
+// ============================================
+
+export const characterKnowledge = pgTable(
+  'character_knowledge',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    characterId: uuid('character_id')
+      .notNull()
+      .references(() => entities.id, { onDelete: 'cascade' }),
+    entityId: uuid('entity_id')
+      .notNull()
+      .references(() => entities.id, { onDelete: 'cascade' }),
+    sessionId: uuid('session_id').references(() => entities.id), // When the character learned about this entity
+    learnedAt: timestamp('learned_at').defaultNow().notNull(),
+    notes: text('notes'), // Optional DM notes about how/why they know
+  },
+  (table) => ({
+    uniqueKnowledge: unique().on(table.characterId, table.entityId),
+    characterIdx: index('knowledge_character_idx').on(table.characterId),
+    entityIdx: index('knowledge_entity_idx').on(table.entityId),
+  })
+)
+
+export const characterKnowledgeRelations = relations(characterKnowledge, ({ one }) => ({
+  character: one(entities, {
+    fields: [characterKnowledge.characterId],
+    references: [entities.id],
+    relationName: 'characterKnowledge',
+  }),
+  entity: one(entities, {
+    fields: [characterKnowledge.entityId],
+    references: [entities.id],
+    relationName: 'knownEntities',
+  }),
+  session: one(entities, {
+    fields: [characterKnowledge.sessionId],
+    references: [entities.id],
+    relationName: 'learnedInSession',
+  }),
+}))
+
+export type CharacterKnowledge = typeof characterKnowledge.$inferSelect
+
+// ============================================
+// Entity Facts (Incremental Knowledge Building)
+// ============================================
+
+export const factSectionEnum = [
+  'appearance',      // physical description
+  'personality',     // traits, behavior
+  'history',         // past events, backstory
+  'abilities',       // skills, powers, class
+  'possessions',     // items, property
+  'relationships',   // connections to others
+  'location',        // where they are/live
+  'goals',           // motivations, quests
+  'secrets',         // DM-only typically
+  'other',
+] as const
+
+export type FactSection = (typeof factSectionEnum)[number]
+
+export const entityFacts = pgTable(
+  'entity_facts',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    entityId: uuid('entity_id')
+      .notNull()
+      .references(() => entities.id, { onDelete: 'cascade' }),
+
+    content: text('content').notNull(),              // "Lost his arm fighting the Dragon of Krell"
+    section: text('section').notNull(),              // appearance, history, personality, etc.
+
+    sourceDocumentId: uuid('source_document_id').references(() => documents.id, { onDelete: 'set null' }),
+    sourceSessionId: uuid('source_session_id').references(() => entities.id, { onDelete: 'set null' }),
+    sourceExcerpt: text('source_excerpt'),           // exact quote from source
+
+    confidence: text('confidence').default('1.0'),
+    isDmOnly: boolean('is_dm_only').default(false),
+
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    createdBy: uuid('created_by').references(() => users.id),
+  },
+  (table) => ({
+    entityIdx: index('entity_facts_entity_idx').on(table.entityId),
+    sectionIdx: index('entity_facts_section_idx').on(table.entityId, table.section),
+    campaignIdx: index('entity_facts_campaign_idx').on(table.campaignId),
+  })
+)
+
+// Facts can mention other entities (creates implicit relationships)
+export const factMentions = pgTable(
+  'fact_mentions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    factId: uuid('fact_id')
+      .notNull()
+      .references(() => entityFacts.id, { onDelete: 'cascade' }),
+    mentionedEntityId: uuid('mentioned_entity_id')
+      .notNull()
+      .references(() => entities.id, { onDelete: 'cascade' }),
+    relationshipType: text('relationship_type'),     // enemy_of, lives_in, etc. (optional)
+  },
+  (table) => ({
+    uniqueMention: unique().on(table.factId, table.mentionedEntityId),
+    factIdx: index('fact_mentions_fact_idx').on(table.factId),
+    entityIdx: index('fact_mentions_entity_idx').on(table.mentionedEntityId),
+  })
+)
+
+// Relations for facts
+export const entityFactsRelations = relations(entityFacts, ({ one, many }) => ({
+  campaign: one(campaigns, {
+    fields: [entityFacts.campaignId],
+    references: [campaigns.id],
+  }),
+  entity: one(entities, {
+    fields: [entityFacts.entityId],
+    references: [entities.id],
+  }),
+  sourceDocument: one(documents, {
+    fields: [entityFacts.sourceDocumentId],
+    references: [documents.id],
+  }),
+  sourceSession: one(entities, {
+    fields: [entityFacts.sourceSessionId],
+    references: [entities.id],
+    relationName: 'factSourceSession',
+  }),
+  creator: one(users, {
+    fields: [entityFacts.createdBy],
+    references: [users.id],
+  }),
+  mentions: many(factMentions),
+}))
+
+export const factMentionsRelations = relations(factMentions, ({ one }) => ({
+  fact: one(entityFacts, {
+    fields: [factMentions.factId],
+    references: [entityFacts.id],
+  }),
+  mentionedEntity: one(entities, {
+    fields: [factMentions.mentionedEntityId],
+    references: [entities.id],
+  }),
+}))
+
+export type EntityFact = typeof entityFacts.$inferSelect
+export type FactMention = typeof factMentions.$inferSelect
