@@ -265,12 +265,19 @@ export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithRevie
             ...prev,
             `Chunk ${i + 1}: Found ${chunkResult.entities?.length || 0} entities`,
           ])
+
+          // Small delay between chunks to avoid rate limiting
+          if (i < chunks.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500))
+          }
         } catch (chunkError) {
           console.error(`Error processing chunk ${i + 1}:`, chunkError)
           setProgressSteps((prev) => [
             ...prev,
             `Chunk ${i + 1}: Error (skipped)`,
           ])
+          // Delay even on error
+          await new Promise(resolve => setTimeout(resolve, 1000))
         }
       }
 

@@ -98,9 +98,9 @@ export const RATE_LIMITS = {
     windowSeconds: 60,
   } satisfies RateLimitConfig,
 
-  // Extraction: 10 requests per minute per user (expensive)
+  // Extraction: 60 requests per minute per user (chunks are sequential)
   extraction: {
-    limit: 10,
+    limit: 60,
     windowSeconds: 60,
   } satisfies RateLimitConfig,
 
