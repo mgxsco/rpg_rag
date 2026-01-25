@@ -489,7 +489,7 @@ export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithRevie
     )
   }, [])
 
-  // Commit approved entities
+  // Commit approved entities using fact-based system
   const handleCommit = async () => {
     setPhase('committing')
 
@@ -498,41 +498,47 @@ export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithRevie
         (e) => e.status === 'approved' || e.status === 'edited'
       )
 
-      // Build request
-      const request: BatchCommitRequest = {
-        documentName: fileName,
-        documentContent: fileContent,
-        entities: approvedEntities.map((e): ApprovedEntity => ({
-          tempId: e.tempId,
-          name: e.name,
-          canonicalName: e.canonicalName,
-          entityType: e.entityType,
-          content: e.content,
-          aliases: e.aliases,
-          tags: e.tags,
-          isDmOnly: false, // Default for AI extraction
-          mergeTargetId: e.mergeTargetId,
-        })),
-        relationships: relationships
-          .filter((r) => {
-            const approvedTempIds = new Set(approvedEntities.map((e) => e.tempId))
-            return (
-              approvedTempIds.has(r.sourceEntityTempId) &&
-              approvedTempIds.has(r.targetEntityTempId)
-            )
-          })
-          .map((r): ApprovedRelationship => ({
-            sourceEntityTempId: r.sourceEntityTempId,
-            targetEntityTempId: r.targetEntityTempId,
-            relationshipType: r.relationshipType,
-            reverseLabel: r.reverseLabel,
-          })),
+      // Get approved canonical names (including merge targets)
+      const approvedCanonicalNames = new Set<string>()
+      for (const entity of approvedEntities) {
+        approvedCanonicalNames.add(entity.canonicalName)
+        // If merging into existing, also include the original name
+        if (entity.mergeTargetId) {
+          const match = existingMatches.find(m => m.stagedTempId === entity.tempId)
+          if (match) {
+            approvedCanonicalNames.add(match.existingEntity.canonicalName)
+          }
+        }
       }
 
-      const response = await fetch(`/api/campaigns/${campaignId}/entities/batch`, {
+      // Get extracted facts from window (stored during extraction)
+      const allFacts = (window as any).__extractedFacts || []
+      const newEntities = (window as any).__newEntities || []
+
+      // Filter facts to only include those for approved entities
+      const approvedFacts = allFacts.filter((fact: any) => {
+        const canonicalName = fact.subject.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+        return approvedCanonicalNames.has(canonicalName)
+      })
+
+      // Filter new entities to only include approved ones
+      const approvedNewEntities = newEntities.filter((e: any) =>
+        approvedCanonicalNames.has(e.canonicalName)
+      )
+
+      // Use fact-based commit endpoint - this will:
+      // 1. Create new entities if they don't exist
+      // 2. Add facts to existing entities if they do exist
+      // 3. Regenerate wiki summaries from accumulated facts
+      const response = await fetch(`/api/campaigns/${campaignId}/extract-facts/commit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
+        body: JSON.stringify({
+          facts: approvedFacts,
+          newEntities: approvedNewEntities,
+          regenerateSummaries: true,
+          summaryModel: 'claude-3-5-haiku-20241022',
+        }),
       })
 
       if (!response.ok) {
@@ -540,15 +546,19 @@ export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithRevie
         throw new Error(data.error || 'Commit failed')
       }
 
-      const result: BatchCommitResponse = await response.json()
+      const result = await response.json()
 
       setCommitResult({
-        documentId: result.documentId,
-        createdCount: result.createdEntities.length,
-        mergedCount: result.mergedEntities.length,
-        relationshipsCount: result.createdRelationships,
-        embeddingsStatus: result.embeddingsStatus,
+        documentId: crypto.randomUUID(),
+        createdCount: result.createdEntityIds?.length || 0,
+        mergedCount: result.updatedEntityIds?.length || 0, // Entities with new facts added
+        relationshipsCount: 0,
+        embeddingsStatus: undefined,
       })
+
+      // Clean up
+      delete (window as any).__extractedFacts
+      delete (window as any).__newEntities
 
       setPhase('complete')
     } catch (error) {
