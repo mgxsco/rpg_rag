@@ -192,9 +192,18 @@ export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithRevie
         `Parsed ${parseResult.contentLength.toLocaleString()} characters into ${totalChunks} chunks`,
       ])
 
-      // Step 2: Extract entities from each chunk individually
-      const allEntities: StagedEntity[] = []
-      const allRelationships: StagedRelationship[] = []
+      // Step 2: Extract FACTS from each chunk (incremental enrichment)
+      const allFacts: Array<{
+        subject: string
+        subjectType: string
+        fact: string
+        section: string
+        sourceExcerpt: string
+        isDmOnly: boolean
+        confidence: number
+        mentions: Array<{ name: string; type: string; relationship?: string }>
+      }> = []
+      const allNewEntities: Array<{ name: string; type: string; canonicalName: string }> = []
       const seenEntityNames = new Set<string>()
 
       for (let i = 0; i < chunks.length; i++) {
@@ -202,11 +211,12 @@ export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithRevie
           stage: 'extracting',
           current: i + 1,
           total: totalChunks,
-          message: `Processing chunk ${i + 1}/${totalChunks}...`,
+          message: `Extracting facts from chunk ${i + 1}/${totalChunks}...`,
         })
 
         try {
-          const chunkResponse = await fetch(`/api/campaigns/${campaignId}/extract-step/chunk`, {
+          // Use fact-based extraction endpoint
+          const chunkResponse = await fetch(`/api/campaigns/${campaignId}/extract-facts/chunk`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -215,11 +225,8 @@ export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithRevie
               totalChunks,
               language,
               existingEntityNames: [...existingEntityNames, ...Array.from(seenEntityNames)],
-              settings: {
-                aggressiveness: 'obsessive',
-                extractionModel: 'claude-3-5-haiku-20241022',
-                confidenceThreshold: 0.5,
-              },
+              extractionModel: 'claude-3-5-haiku-20241022',
+              storeImmediately: false, // Don't store yet, let user review
             }),
           })
 
@@ -230,40 +237,33 @@ export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithRevie
 
           const chunkResult = await chunkResponse.json()
 
-          // Add new entities (dedupe by canonical name)
-          for (const entity of chunkResult.entities || []) {
-            if (!seenEntityNames.has(entity.canonicalName)) {
-              seenEntityNames.add(entity.canonicalName)
-              allEntities.push(entity)
+          // Collect facts
+          for (const fact of chunkResult.facts || []) {
+            allFacts.push(fact)
 
+            // Track seen subjects
+            const canonicalName = fact.subject.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+            if (!seenEntityNames.has(canonicalName)) {
+              seenEntityNames.add(canonicalName)
               // Show discovered entity
               setDiscoveredEntities((prev) => [
                 ...prev,
-                { name: entity.name, type: entity.entityType },
+                { name: fact.subject, type: fact.subjectType },
               ])
             }
           }
 
-          // Collect relationships
-          if (chunkResult.rawRelationships) {
-            for (const rel of chunkResult.rawRelationships) {
-              allRelationships.push({
-                tempId: crypto.randomUUID(),
-                sourceEntityTempId: '', // Will be resolved later
-                targetEntityTempId: '',
-                sourceEntityName: rel.sourceEntity,
-                targetEntityName: rel.targetEntity,
-                relationshipType: rel.relationshipType,
-                reverseLabel: rel.reverseLabel,
-                excerpt: rel.excerpt || '',
-                status: 'pending' as const,
-              })
+          // Collect new entities
+          for (const newEntity of chunkResult.newEntities || []) {
+            if (!seenEntityNames.has(newEntity.canonicalName)) {
+              seenEntityNames.add(newEntity.canonicalName)
+              allNewEntities.push(newEntity)
             }
           }
 
           setProgressSteps((prev) => [
             ...prev,
-            `Chunk ${i + 1}: Found ${chunkResult.entities?.length || 0} entities`,
+            `Chunk ${i + 1}: Found ${chunkResult.facts?.length || 0} facts`,
           ])
 
           // Small delay between chunks to avoid rate limiting
@@ -281,27 +281,96 @@ export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithRevie
         }
       }
 
-      setProgressSteps((prev) => [
-        ...prev,
-        `Extraction complete: ${allEntities.length} entities found`,
-      ])
+      // Step 3: Group facts by subject to create staged entities
+      const factsBySubject = new Map<string, typeof allFacts>()
+      for (const fact of allFacts) {
+        const canonicalName = fact.subject.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+        if (!factsBySubject.has(canonicalName)) {
+          factsBySubject.set(canonicalName, [])
+        }
+        factsBySubject.get(canonicalName)!.push(fact)
+      }
 
-      // Step 3: Build entity lookup and resolve relationship tempIds
+      // Convert grouped facts to staged entities
+      const allEntities: StagedEntity[] = []
+      const allRelationships: StagedRelationship[] = []
       const nameToTempId = new Map<string, string>()
-      for (const entity of allEntities) {
-        nameToTempId.set(entity.name.toLowerCase(), entity.tempId)
-        for (const alias of entity.aliases || []) {
-          nameToTempId.set(alias.toLowerCase(), entity.tempId)
+
+      for (const [canonicalName, facts] of factsBySubject) {
+        const firstFact = facts[0]
+        const tempId = crypto.randomUUID()
+
+        // Build content from facts grouped by section
+        const sections = new Map<string, string[]>()
+        for (const fact of facts) {
+          if (!sections.has(fact.section)) {
+            sections.set(fact.section, [])
+          }
+          sections.get(fact.section)!.push(fact.fact)
+        }
+
+        let content = `# ${firstFact.subject}\n\n`
+        const sectionOrder = ['appearance', 'personality', 'abilities', 'possessions', 'location', 'relationships', 'history', 'goals', 'other']
+        for (const section of sectionOrder) {
+          const sectionFacts = sections.get(section)
+          if (sectionFacts && sectionFacts.length > 0) {
+            content += `## ${section.charAt(0).toUpperCase() + section.slice(1)}\n`
+            for (const f of sectionFacts) {
+              content += `- ${f}\n`
+            }
+            content += '\n'
+          }
+        }
+
+        const entity: StagedEntity = {
+          tempId,
+          name: firstFact.subject,
+          canonicalName,
+          entityType: firstFact.subjectType,
+          content: content.trim(),
+          aliases: [],
+          tags: [firstFact.subjectType],
+          confidence: Math.max(...facts.map(f => f.confidence)),
+          excerpt: facts.map(f => f.fact).slice(0, 3).join('. '),
+          status: 'pending' as const,
+        }
+
+        allEntities.push(entity)
+        nameToTempId.set(firstFact.subject.toLowerCase(), tempId)
+        nameToTempId.set(canonicalName, tempId)
+
+        // Extract relationships from fact mentions
+        for (const fact of facts) {
+          for (const mention of fact.mentions) {
+            if (mention.relationship) {
+              allRelationships.push({
+                tempId: crypto.randomUUID(),
+                sourceEntityTempId: tempId,
+                targetEntityTempId: '', // Will be resolved after all entities created
+                sourceEntityName: firstFact.subject,
+                targetEntityName: mention.name,
+                relationshipType: mention.relationship,
+                excerpt: fact.sourceExcerpt || fact.fact,
+                status: 'pending' as const,
+              })
+            }
+          }
         }
       }
 
+      // Resolve relationship target tempIds
       const resolvedRelationships = allRelationships
         .map((rel) => ({
           ...rel,
-          sourceEntityTempId: nameToTempId.get(rel.sourceEntityName.toLowerCase()) || '',
-          targetEntityTempId: nameToTempId.get(rel.targetEntityName.toLowerCase()) || '',
+          targetEntityTempId: nameToTempId.get(rel.targetEntityName.toLowerCase()) ||
+                              nameToTempId.get(rel.targetEntityName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')) || '',
         }))
         .filter((rel) => rel.sourceEntityTempId && rel.targetEntityTempId)
+
+      setProgressSteps((prev) => [
+        ...prev,
+        `Extraction complete: ${allFacts.length} facts → ${allEntities.length} entities`,
+      ])
 
       // Step 4: Check for duplicates with existing entities
       const existingEntityMatches: EntityMatch[] = []
@@ -332,6 +401,10 @@ export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithRevie
           })
         }
       }
+
+      // Store facts for commit phase
+      ;(window as any).__extractedFacts = allFacts
+      ;(window as any).__newEntities = allNewEntities
 
       setEntities(allEntities)
       setRelationships(resolvedRelationships)
