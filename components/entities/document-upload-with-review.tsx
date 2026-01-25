@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { v4 as uuidv4 } from 'uuid'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -298,7 +299,7 @@ export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithRevie
 
       for (const [canonicalName, facts] of factsBySubject) {
         const firstFact = facts[0]
-        const tempId = crypto.randomUUID()
+        const tempId = uuidv4()
 
         // Build content from facts grouped by section
         const sections = new Map<string, string[]>()
@@ -344,7 +345,7 @@ export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithRevie
           for (const mention of fact.mentions) {
             if (mention.relationship) {
               allRelationships.push({
-                tempId: crypto.randomUUID(),
+                tempId: uuidv4(),
                 sourceEntityTempId: tempId,
                 targetEntityTempId: '', // Will be resolved after all entities created
                 sourceEntityName: firstFact.subject,
@@ -549,7 +550,7 @@ export function DocumentUploadWithReview({ campaignId }: DocumentUploadWithRevie
       const result = await response.json()
 
       setCommitResult({
-        documentId: crypto.randomUUID(),
+        documentId: uuidv4(),
         createdCount: result.createdEntityIds?.length || 0,
         mergedCount: result.updatedEntityIds?.length || 0, // Entities with new facts added
         relationshipsCount: 0,
